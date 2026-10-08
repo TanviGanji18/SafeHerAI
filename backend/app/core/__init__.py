@@ -1,0 +1,3 @@
+"""
+SafeHer AI - Core Package
+"""

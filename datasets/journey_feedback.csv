@@ -1,0 +1,10 @@
+journey_id,timestamp,user_id,origin_name,destination_name,route_id,distance_km,duration_min,safety_score,route_experience,issues,comments,emergency_occurred
+JRN-HYD-20261003152516-05A988,2026-10-03T15:25:29.619404+00:00,test_user_001,Secunderabad Railway Station,"Charminar, Old City",Route_A_Safer,11.8,23.0,85.8,Comfortable,Poor lighting,Felt secure along Tank Bund road with visible police patrols.,True
+JRN-HYD-20261003153120-D4B0C5,2026-10-03T15:31:33.419419+00:00,test_user_001,Secunderabad Railway Station,"Charminar, Old City",Route_A_Safer,11.8,23.0,85.8,Comfortable,Poor lighting,Felt secure along Tank Bund road with visible police patrols.,True
+JRN-HYD-20261003153409-165019,2026-10-03T15:34:22.167664+00:00,usr_test_verification,Secunderabad Station,Charminar,route_sec_char,8.5,22.0,81.4,Comfortable,Poor lighting,"Well lit mostly, but one alley was dim",True
+JRN-HYD-20261006111406-DBABE3,2026-10-06T11:14:19.777804+00:00,test_user_001,Secunderabad Railway Station,"Charminar, Old City",Route_A_Safer,11.8,23.0,85.8,Comfortable,Poor lighting,Felt secure along Tank Bund road with visible police patrols.,True
+JRN-1791314880084,2026-10-06T19:30:35.910998+00:00,anonymous_user,Origin,Destination,unknown_route,0.0,0.0,0.0,Comfortable,,Route was comfortable and easy to follow.,False
+JRN-1791315325910,2026-10-06T19:36:13.070305+00:00,anonymous_user,Origin,Destination,unknown_route,0.0,0.0,0.0,Comfortable,,,False
+JRN-HYD-20261008093638-D26D4A,2026-10-08T09:49:12.481350+00:00,anonymous_user,Secunderabad Railway Station,"Charminar, Old City",Route_C_Peripheral,12.03,22.6,85.8,Comfortable,,,False
+JRN-HYD-20261008095002-5C3A8F,2026-10-08T09:50:09.763400+00:00,guest_user,Secunderabad Railway Station,"Charminar, Old City",Route_C_Peripheral,12.03,22.6,85.8,Comfortable,,,False
+JRN-HYD-20261008102148-C3D084,2026-10-08T10:21:51.865955+00:00,test_user_001,Secunderabad Railway Station,"Charminar, Old City",Route_A_Safer,11.8,23.0,85.8,Comfortable,Poor lighting,Felt secure along Tank Bund road with visible police patrols.,True

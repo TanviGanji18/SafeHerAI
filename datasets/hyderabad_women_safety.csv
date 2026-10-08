@@ -1,0 +1,37 @@
+year,zone,category,metric,value
+2021,All Zones,Crimes Against Women,cases_registered,3050
+2021,All Zones,Cruelty by Husband/Relatives,cases_registered,1605
+2021,All Zones,Assault to Outrage Modesty,cases_registered,612
+2021,All Zones,Kidnapping & Abduction,cases_registered,285
+2021,All Zones,Rape,cases_registered,147
+2021,All Zones,SHE Teams Interventions,offenders_caught,1144
+2022,All Zones,Crimes Against Women (Commissionerate),cases_registered,2484
+2022,All Zones,Crimes Against Women (NCRB UA),cases_registered,3145
+2022,All Zones,Cruelty by Husband/Relatives,cases_registered,1580
+2022,All Zones,Assault to Outrage Modesty,cases_registered,628
+2022,All Zones,Kidnapping & Abduction,cases_registered,298
+2022,All Zones,Rape,cases_registered,154
+2022,All Zones,SHE Teams Interventions,offenders_caught,1268
+2023,All Zones,Crimes Against Women (Commissionerate),cases_registered,2775
+2023,All Zones,Crimes Against Women (NCRB UA),cases_registered,3822
+2023,All Zones,Cruelty by Husband/Relatives,cases_registered,1743
+2023,All Zones,Assault to Outrage Modesty,cases_registered,751
+2023,All Zones,Kidnapping & Abduction,cases_registered,342
+2023,All Zones,Rape,cases_registered,186
+2023,All Zones,SHE Teams Interventions,complaints_received,4500
+2024,All Zones,Crimes Against Women,cases_registered,2482
+2024,All Zones,POCSO (Crimes Against Children),cases_registered,449
+2024,West Zone,All FIRs,zone_total_cases,7727
+2024,South West Zone,All FIRs,zone_total_cases,5639
+2024,East Zone,All FIRs,zone_total_cases,4848
+2024,Central Zone,All FIRs,zone_total_cases,4520
+2024,North Zone,All FIRs,zone_total_cases,4310
+2024,South Zone,All FIRs,zone_total_cases,4480
+2024,South East Zone,All FIRs,zone_total_cases,4420
+2024,All Zones,SHE Teams Decade Milestone,total_petitions_state,66617
+2024,All Zones,SHE Teams Decade Milestone,total_firs_state,6319
+2025,All Zones,Crimes Against Women,cases_registered,2625
+2025,All Zones,POCSO (Crimes Against Children),cases_registered,568
+2025,All Zones,SHE Teams Interventions,complaints_resolved,1149
+2025,All Zones,SHE Teams Interventions,offenders_caught,3826
+2025,All Zones,SHE Teams Interventions,monthly_avg_complaints,500

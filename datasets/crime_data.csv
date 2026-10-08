@@ -1,0 +1,39 @@
+year,zone,crime_type,count,source
+2021,Hyderabad City (All Zones),Total Cognizable Crimes,21998,Hyderabad Police Review / NCRB 2021
+2021,Hyderabad City (All Zones),Crimes Against Women (Total),3050,NCRB Crime in India 2021 (City Table)
+2021,Hyderabad City (All Zones),Cruelty by Husband/Relatives,1605,NCRB 2021 (Sec 498A)
+2021,Hyderabad City (All Zones),Assault on Women / Outrage Modesty,612,NCRB 2021 (Sec 354)
+2021,Hyderabad City (All Zones),Kidnapping & Abduction of Women,285,NCRB 2021
+2021,Hyderabad City (All Zones),Rape,147,NCRB 2021
+2022,Hyderabad City (All Zones),Total Cognizable Crimes,24220,Hyderabad Police Annual Crime Report 2022
+2022,Hyderabad City (All Zones),Crimes Against Women (Commissionerate),2484,Hyderabad Police Annual Crime Report 2022
+2022,Hyderabad UA (Metropolitan),Crimes Against Women (NCRB UA),3145,NCRB Crime in India 2022 (City Table)
+2022,Hyderabad UA (Metropolitan),Cruelty by Husband/Relatives,1580,NCRB 2022
+2022,Hyderabad UA (Metropolitan),Assault on Women / Outrage Modesty,628,NCRB 2022
+2022,Hyderabad UA (Metropolitan),Kidnapping & Abduction of Women,298,NCRB 2022
+2022,Hyderabad UA (Metropolitan),Rape,154,NCRB 2022
+2023,Hyderabad City (All Zones),Total Cognizable Crimes,24821,"Hyderabad Police Annual Crime Report (Dec 22, 2023)"
+2023,Hyderabad City (All Zones),Crimes Against Women (Commissionerate),2775,"Hyderabad Police Annual Crime Report (Dec 22, 2023)"
+2023,Hyderabad UA (Metropolitan),Crimes Against Women (NCRB UA),3822,NCRB Crime in India 2023 (City Table)
+2023,Hyderabad UA (Metropolitan),Cruelty by Husband/Relatives,1743,NCRB 2023
+2023,Hyderabad UA (Metropolitan),Assault on Women / Outrage Modesty,751,NCRB 2023
+2023,Hyderabad UA (Metropolitan),Kidnapping & Abduction of Women,342,NCRB 2023
+2023,Hyderabad UA (Metropolitan),Rape,186,NCRB 2023
+2024,Hyderabad City (All Zones),Total FIRs Registered,35944,"Hyderabad Police Annual Crime Report (Dec 22, 2024)"
+2024,Hyderabad City (All Zones),Crimes Against Women (Total),2482,"Hyderabad Police Annual Crime Report (Dec 22, 2024)"
+2024,Hyderabad City (All Zones),POCSO (Crimes Against Children),449,"Hyderabad Police Annual Crime Report (Dec 22, 2024)"
+2024,Hyderabad City (All Zones),Bodily Offences,2126,"Hyderabad Police Annual Crime Report (Dec 22, 2024)"
+2024,Hyderabad City (All Zones),Property Offences,6854,"Hyderabad Police Annual Crime Report (Dec 22, 2024)"
+2024,West Zone,Zone Total FIRs,7727,Hyderabad Police Annual Report 2024 Zone Breakdown
+2024,South West Zone,Zone Total FIRs,5639,Hyderabad Police Annual Report 2024 Zone Breakdown
+2024,East Zone,Zone Total FIRs,4848,Hyderabad Police Annual Report 2024 Zone Breakdown
+2024,Central Zone,Zone Total FIRs,4520,Hyderabad Police Annual Report 2024 Zone Breakdown
+2024,North Zone,Zone Total FIRs,4310,Hyderabad Police Annual Report 2024 Zone Breakdown
+2024,South Zone,Zone Total FIRs,4480,Hyderabad Police Annual Report 2024 Zone Breakdown
+2024,South East Zone,Zone Total FIRs,4420,Hyderabad Police Annual Report 2024 Zone Breakdown
+2025,Hyderabad City (All Zones),Total Cases Registered,30690,"Hyderabad Police Annual Crime Report (Dec 27, 2025)"
+2025,Hyderabad City (All Zones),Crimes Against Women (Total),2625,"Hyderabad Police Annual Crime Report (Dec 27, 2025)"
+2025,Hyderabad City (All Zones),POCSO (Crimes Against Children),568,"Hyderabad Police Annual Crime Report (Dec 27, 2025)"
+2025,Hyderabad City (All Zones),Bodily Offences,1785,"Hyderabad Police Annual Crime Report (Dec 27, 2025)"
+2025,Hyderabad City (All Zones),Property Offences,4935,"Hyderabad Police Annual Crime Report (Dec 27, 2025)"
+2025,Hyderabad City (All Zones),Cybercrime Cases,2350,"Hyderabad Police Annual Crime Report (Dec 27, 2025)"

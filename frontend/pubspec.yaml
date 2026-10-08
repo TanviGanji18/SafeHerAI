@@ -1,0 +1,38 @@
+name: safeher_ai
+description: "SafeHer AI - Women Safety and Route Recommendation Mobile App for Hyderabad"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Navigation & Maps
+  google_maps_flutter: ^2.6.0
+  geolocator: ^11.0.0
+  flutter_polyline_points: ^2.0.0
+
+  # State Management & Network
+  provider: ^6.1.2
+  http: ^1.2.1
+
+  # Firebase Services (Authentication & Cloud Firestore)
+  firebase_core: ^2.30.0
+  firebase_auth: ^4.19.0
+  cloud_firestore: ^4.17.0
+
+  # Utilities & UI Icons
+  intl: ^0.19.0
+  url_launcher: ^6.2.6
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

@@ -1,0 +1,26 @@
+# SafeHer AI Backend - Python Dependencies
+# =========================================
+# Only packages genuinely required by the backend are listed here.
+
+# Web Framework
+fastapi==0.136.1
+
+# ASGI Server
+uvicorn[standard]==0.34.3
+
+# Data validation (Pydantic ships with FastAPI but pinned explicitly)
+pydantic==2.13.4
+
+# Spatial data & datasets
+pandas==2.2.3
+numpy==2.2.0
+
+# HTTP requests (for Overpass / external calls if needed in future)
+requests==2.32.5
+
+# Testing
+pytest==8.3.5
+httpx==0.28.1          # ASGI test client for FastAPI
+
+# Firebase authentication & services
+firebase-admin>=7.7.0

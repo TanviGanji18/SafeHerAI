@@ -1,0 +1,1760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SafeHer AI – Women Safety & Safer Route Navigation</title>
+
+  <!-- Google Fonts: Inter & Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <style>
+    :root {
+      --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+      --brand-primary: #581c87;
+      --brand-indigo: #4338ca;
+      --brand-purple: #7e22ce;
+
+      --safe-emerald: #059669;
+      --safe-emerald-light: #ecfdf5;
+      --safe-emerald-border: #a7f3d0;
+      --safe-emerald-dark: #065f46;
+
+      --fast-blue: #2563eb;
+      --fast-blue-light: #eff6ff;
+      --fast-blue-border: #bfdbfe;
+      --fast-blue-dark: #1e40af;
+
+      --alt-slate: #475569;
+      --alt-slate-light: #f8fafc;
+      --alt-slate-border: #cbd5e1;
+
+      --sos-red: #dc2626;
+      --sos-red-hover: #b91c1c;
+
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+
+      --surface-glass: rgba(255, 255, 255, 0.95);
+      --surface-card: #ffffff;
+      --border-subtle: #e2e8f0;
+
+      --shadow-nav: 0 12px 36px -4px rgba(15, 23, 42, 0.16), 0 4px 12px rgba(15, 23, 42, 0.08);
+      --shadow-soft: 0 2px 8px rgba(15, 23, 42, 0.06);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-body);
+      color: var(--text-primary);
+      background: #e2e8f0;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* =========================================================================
+       Full-Screen Dominant Interactive Map
+       ========================================================================= */
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+      background: #e5e7eb;
+    }
+
+    /* Leaflet Controls Styling */
+    .leaflet-control-zoom {
+      border: none !important;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12) !important;
+      border-radius: 10px !important;
+      overflow: hidden;
+      margin-left: 20px !important;
+      margin-bottom: 24px !important;
+    }
+    .leaflet-control-zoom a {
+      background-color: var(--surface-glass) !important;
+      backdrop-filter: blur(8px);
+      color: var(--text-primary) !important;
+      border: 1px solid var(--border-subtle) !important;
+      width: 34px !important;
+      height: 34px !important;
+      line-height: 34px !important;
+      font-size: 14px !important;
+    }
+
+    /* =========================================================================
+       Top Floating Navigation Bar (Brand + Layers + SOS)
+       ========================================================================= */
+    .floating-top-bar {
+      position: absolute;
+      top: 16px;
+      left: 20px;
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .brand-pill {
+      pointer-events: auto;
+      background: var(--surface-glass);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+      padding: 8px 16px;
+      border-radius: 30px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-logo-icon {
+      background: linear-gradient(135deg, var(--brand-purple), var(--brand-primary));
+      color: white;
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .brand-title {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+    }
+    .brand-location {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--brand-purple);
+      background: #f3e8ff;
+      padding: 2px 7px;
+      border-radius: 10px;
+    }
+
+    /* Safety Layer Toggle Chips (No large counters) */
+    .layers-pill {
+      pointer-events: auto;
+      background: var(--surface-glass);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+      padding: 4px 6px;
+      border-radius: 30px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .layer-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      padding: 6px 11px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .layer-btn:hover {
+      background: #f1f5f9;
+      color: var(--text-primary);
+    }
+    .layer-btn.active {
+      background: #ffffff;
+      color: var(--text-primary);
+      border-color: var(--border-subtle);
+      box-shadow: var(--shadow-soft);
+    }
+    .dot-police { width: 7px; height: 7px; border-radius: 50%; background: #2563eb; }
+    .dot-hospital { width: 7px; height: 7px; border-radius: 50%; background: #dc2626; }
+    .dot-transit { width: 7px; height: 7px; border-radius: 50%; background: #f97316; }
+    .dot-hazard { width: 7px; height: 7px; border-radius: 50%; background: #9333ea; }
+
+    /* SOS Emergency Floating Button */
+    .sos-floating-pill {
+      pointer-events: auto;
+      background: var(--sos-red);
+      color: #ffffff;
+      border: 1.5px solid #ffffff;
+      padding: 7px 16px;
+      border-radius: 24px;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4);
+      transition: all 0.2s ease;
+      animation: pulse-sos 2.5s infinite;
+    }
+    .sos-floating-pill:hover {
+      background: var(--sos-red-hover);
+      transform: scale(1.03);
+    }
+    @keyframes pulse-sos {
+      0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
+      70% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+    }
+
+    /* =========================================================================
+       Right Navigation Floating Panel
+       ========================================================================= */
+    .nav-panel {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      bottom: 16px;
+      width: 400px;
+      background: var(--surface-glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      border-radius: 20px;
+      box-shadow: var(--shadow-nav);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    /* Search & Inputs Module */
+    .search-module {
+      padding: 20px 20px 16px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .waypoints-track {
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+      position: relative;
+    }
+
+    .transit-dots-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      width: 14px;
+      flex-shrink: 0;
+    }
+    .dot-from {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--safe-emerald);
+      box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.2);
+    }
+    .transit-stem {
+      width: 2px;
+      flex: 1;
+      background: repeating-linear-gradient(to bottom, #94a3b8 0, #94a3b8 3px, transparent 3px, transparent 6px);
+      margin: 4px 0;
+    }
+    .pin-to {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      background: var(--sos-red);
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2);
+    }
+
+    .inputs-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+    }
+
+    .field-row {
+      position: relative;
+    }
+    .field-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin-bottom: 3px;
+    }
+    .nav-input {
+      width: 100%;
+      padding: 8px 30px 8px 10px;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      font-family: var(--font-body);
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-primary);
+      background: #f8fafc;
+      outline: none;
+      transition: all 0.15s ease;
+    }
+    .nav-input:focus {
+      background: #ffffff;
+      border-color: var(--brand-purple);
+      box-shadow: 0 0 0 3px rgba(126, 34, 206, 0.1);
+    }
+    .btn-clear-input {
+      position: absolute;
+      right: 8px;
+      top: 24px;
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 3px;
+      border-radius: 4px;
+      transition: color 0.15s;
+    }
+    .btn-clear-input:hover {
+      color: var(--text-primary);
+    }
+
+    /* Swap Button */
+    .btn-swap {
+      position: absolute;
+      right: -8px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      z-index: 10;
+      font-size: 12px;
+    }
+    .btn-swap:hover {
+      background: #f1f5f9;
+      color: var(--brand-purple);
+      transform: translateY(-50%) rotate(180deg);
+    }
+
+    /* Autocomplete Dropdown */
+    .autocomplete-list {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      margin-top: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1500;
+      display: none;
+    }
+    .ac-item {
+      padding: 8px 12px;
+      border-bottom: 1px solid #f1f5f9;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      transition: background 0.1s;
+    }
+    .ac-item:last-child {
+      border-bottom: none;
+    }
+    .ac-item:hover {
+      background: #faf5ff;
+    }
+    .ac-name {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .ac-category {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--brand-purple);
+      background: #f3e8ff;
+      padding: 2px 6px;
+      border-radius: 6px;
+    }
+
+    /* Destination Quick Suggestions */
+    .quick-destinations {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .quick-chip {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      padding: 3px 9px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .quick-chip:hover {
+      background: #e2e8f0;
+      color: var(--text-primary);
+    }
+
+    /* Single Primary Action: FIND SAFER ROUTES */
+    .btn-find-routes {
+      margin-top: 14px;
+      width: 100%;
+      background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-purple) 100%);
+      color: #ffffff;
+      border: none;
+      padding: 12px;
+      border-radius: 10px;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 14px rgba(88, 28, 135, 0.25);
+      transition: all 0.2s ease;
+    }
+    .btn-find-routes:hover {
+      box-shadow: 0 6px 18px rgba(88, 28, 135, 0.35);
+      transform: translateY(-1px);
+    }
+    .btn-find-routes:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Scrollable Results Area */
+    .results-scrollable {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .results-scrollable::-webkit-scrollbar {
+      width: 5px;
+    }
+    .results-scrollable::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
+    }
+
+    /* =========================================================================
+       Route Alternatives Cards
+       ========================================================================= */
+    .routes-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+    .routes-header-label {
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+    }
+    .routes-count-pill {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 8px;
+    }
+
+    .routes-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Clean Navigation Route Card */
+    .route-card {
+      background: #ffffff;
+      border: 1.5px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+    .route-card:hover {
+      border-color: #cbd5e1;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+    }
+    .route-card.is-selected {
+      border-color: var(--brand-purple);
+      box-shadow: 0 0 0 1px var(--brand-purple), 0 4px 14px rgba(126, 34, 206, 0.1);
+    }
+
+    /* Category Specific Left Border Strips */
+    .route-card.type-safer {
+      border-left: 4px solid var(--safe-emerald);
+    }
+    .route-card.type-safer.is-selected {
+      border-color: var(--safe-emerald);
+      box-shadow: 0 0 0 1px var(--safe-emerald), 0 4px 14px rgba(5, 150, 105, 0.12);
+    }
+
+    .route-card.type-fastest:not(.type-safer) {
+      border-left: 4px solid var(--fast-blue);
+    }
+
+    .route-card.type-alt {
+      border-left: 4px solid var(--alt-slate);
+    }
+
+    /* Top Row: Category Title & Safety Score */
+    .card-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .category-title {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .title-safer { color: var(--safe-emerald-dark); }
+    .title-fastest { color: var(--fast-blue-dark); }
+    .title-alt { color: var(--alt-slate); }
+
+    .score-chip {
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      display: flex;
+      align-items: baseline;
+      gap: 2px;
+    }
+    .score-chip.high {
+      background: var(--safe-emerald-light);
+      color: var(--safe-emerald-dark);
+      border: 1px solid var(--safe-emerald-border);
+    }
+    .score-chip.moderate {
+      background: #fffbeb;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
+    .score-chip.lower {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+    }
+
+    /* Metrics: Duration & Distance */
+    .metrics-row {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .metrics-row span.meta-sep {
+      color: #cbd5e1;
+      margin: 0 4px;
+    }
+    .metrics-row span.meta-dist {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    /* Real Data Bullet Points */
+    .card-bullets-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 11.5px;
+      line-height: 1.4;
+      color: var(--text-secondary);
+    }
+    .card-bullets-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 5px;
+    }
+    .card-bullets-list li.pro {
+      color: #047857;
+    }
+    .card-bullets-list li.warn {
+      color: #b45309;
+    }
+
+    /* =========================================================================
+       "Why This Route?" Section
+       ========================================================================= */
+    .why-route-section {
+      background: #ffffff;
+      border: 1.5px solid var(--safe-emerald-border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 2px 10px rgba(5, 150, 105, 0.06);
+    }
+    .why-header {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--safe-emerald-dark);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .why-subtitle {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+    .why-bullets {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 11.5px;
+      color: var(--text-primary);
+      margin-bottom: 14px;
+    }
+    .why-bullets li {
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+      line-height: 1.4;
+    }
+    .why-bullets li span.check-icon {
+      color: var(--safe-emerald);
+      font-weight: 800;
+    }
+
+    .btn-view-details {
+      background: none;
+      border: none;
+      color: var(--brand-purple);
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0;
+      transition: color 0.15s;
+    }
+    .btn-view-details:hover {
+      color: var(--brand-primary);
+      text-decoration: underline;
+    }
+
+    /* =========================================================================
+       Seven-Factor Safety Details Modal
+       ========================================================================= */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 2500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal-content-box {
+      background: #ffffff;
+      border-radius: 18px;
+      padding: 24px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+      max-height: 88vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 12px;
+    }
+    .modal-title {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-modal-close {
+      background: #f1f5f9;
+      border: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      color: var(--text-secondary);
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+    .btn-modal-close:hover {
+      background: #e2e8f0;
+      color: var(--text-primary);
+    }
+
+    .factors-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .factor-item {
+      padding: 10px 12px;
+      background: #f8fafc;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+    }
+    .factor-item-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 3px;
+    }
+    .factor-name {
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .factor-pts {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--safe-emerald-dark);
+    }
+    .factor-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.35;
+      margin-bottom: 5px;
+    }
+    .factor-bar-track {
+      height: 4px;
+      background: #e2e8f0;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .factor-bar-fill {
+      height: 100%;
+      background: var(--safe-emerald);
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+
+    .modal-footer-note {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      background: #fafaf9;
+      border: 1px solid #e7e5e4;
+      padding: 10px;
+      border-radius: 8px;
+    }
+
+    /* =========================================================================
+       SOS Emergency Modal
+       ========================================================================= */
+    .sos-dialog-box {
+      background: #111827;
+      color: #ffffff;
+      border: 2px solid var(--sos-red);
+      border-radius: 20px;
+      padding: 26px 22px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 25px 50px rgba(220, 38, 38, 0.4);
+    }
+    .sos-beacon {
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background: var(--sos-red);
+      color: white;
+      margin: 0 auto 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      cursor: pointer;
+      box-shadow: 0 0 25px rgba(220, 38, 38, 0.8);
+      transition: transform 0.2s ease;
+      animation: pulse-sos 1.8s infinite;
+    }
+    .sos-beacon:hover {
+      transform: scale(1.05);
+    }
+    .sos-dialog-box h3 {
+      font-family: var(--font-display);
+      font-size: 17px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+    .sos-dialog-box p {
+      font-size: 11.5px;
+      color: #94a3b8;
+      line-height: 1.4;
+      margin-bottom: 16px;
+    }
+    .sos-status-alert {
+      display: none;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid #22c55e;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 11.5px;
+      color: #86efac;
+      text-align: left;
+    }
+    .helplines-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .helpline-link {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+      padding: 10px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+    .helpline-link:hover {
+      background: rgba(255, 255, 255, 0.16);
+    }
+    .btn-dismiss-sos {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #cbd5e1;
+      padding: 7px 18px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-dismiss-sos:hover {
+      color: #ffffff;
+      border-color: #ffffff;
+    }
+
+    /* Custom Leaflet Marker Pins */
+    .custom-pin {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      color: white;
+      font-weight: 800;
+      font-family: var(--font-display);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+      border: 2px solid #ffffff;
+    }
+    .pin-origin { background: var(--safe-emerald); font-size: 11px; }
+    .pin-destination { background: var(--sos-red); font-size: 11px; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .nav-panel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100vw;
+        height: 60vh;
+        border-radius: 20px 20px 0 0;
+      }
+      .floating-top-bar {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Full-Screen Interactive Live Map (75%–85% Visual Dominance) -->
+  <div id="map"></div>
+
+  <!-- Top Floating Header: Brand + Layer Filters + SOS -->
+  <div class="floating-top-bar">
+    <!-- Brand Identity -->
+    <div class="brand-pill">
+      <div class="brand-logo-icon">🛡️</div>
+      <div class="brand-title">SafeHer AI</div>
+      <div class="brand-location">Hyderabad</div>
+    </div>
+
+    <!-- Safety Infrastructure Layers (Clean, no large counters) -->
+    <div class="layers-pill">
+      <button class="layer-btn active" id="chipPolice" onclick="toggleLayer('police')">
+        <span class="dot-police"></span> Police
+      </button>
+      <button class="layer-btn active" id="chipHospital" onclick="toggleLayer('hospital')">
+        <span class="dot-hospital"></span> Hospitals
+      </button>
+      <button class="layer-btn active" id="chipTransit" onclick="toggleLayer('transit')">
+        <span class="dot-transit"></span> Transit
+      </button>
+      <button class="layer-btn active" id="chipHazard" onclick="toggleLayer('hazard')">
+        <span class="dot-hazard"></span> Hazard Spots
+      </button>
+    </div>
+
+    <!-- Pinned SOS Emergency Trigger -->
+    <button class="sos-floating-pill" onclick="openSOSModal()">
+      <span>🚨</span> SOS EMERGENCY
+    </button>
+  </div>
+
+  <!-- Right-Side Route Navigation Panel -->
+  <aside class="nav-panel" id="navigationPanel">
+    
+    <!-- Top Search Area: FROM / TO -->
+    <div class="search-module">
+      <div class="waypoints-track">
+        
+        <!-- Transit Rail Indicator -->
+        <div class="transit-dots-col">
+          <div class="dot-from" title="Origin"></div>
+          <div class="transit-stem"></div>
+          <div class="pin-to" title="Destination"></div>
+        </div>
+
+        <!-- Input Fields -->
+        <div class="inputs-col">
+          <!-- FROM -->
+          <div class="field-row">
+            <label class="field-label" for="fromInput">FROM</label>
+            <input type="text" id="fromInput" class="nav-input" value="Secunderabad Railway Station" placeholder="Starting point (e.g. Anurag University)" autocomplete="off">
+            <button class="btn-clear-input" onclick="clearField('fromInput')" title="Clear">✕</button>
+            <div id="fromAutocomplete" class="autocomplete-list"></div>
+          </div>
+
+          <!-- TO -->
+          <div class="field-row">
+            <label class="field-label" for="toInput">TO</label>
+            <input type="text" id="toInput" class="nav-input" value="Charminar, Old City" placeholder="Where do you want to go? (e.g. Charminar)" autocomplete="off">
+            <button class="btn-clear-input" onclick="clearField('toInput')" title="Clear">✕</button>
+            <div id="toAutocomplete" class="autocomplete-list"></div>
+          </div>
+
+          <!-- Swap Waypoints Button -->
+          <button class="btn-swap" onclick="swapInputs()" title="Swap From and To">⇅</button>
+        </div>
+      </div>
+
+      <!-- Quick Destination Chips -->
+      <div class="quick-destinations">
+        <button class="quick-chip" onclick="setDestination('Charminar, Old City')">Charminar</button>
+        <button class="quick-chip" onclick="setDestination('Begumpet Airport / Station')">Begumpet</button>
+        <button class="quick-chip" onclick="setDestination('Banjara Hills Road No. 1')">Banjara Hills</button>
+        <button class="quick-chip" onclick="setDestination('Lakdikapul Metro Station')">Lakdikapul</button>
+      </div>
+
+      <!-- Main Action Button: FIND SAFER ROUTES -->
+      <button class="btn-find-routes" id="btnFindRoutes" onclick="executeRouteSearch()">
+        FIND SAFER ROUTES
+      </button>
+    </div>
+
+    <!-- Scrollable Results Section -->
+    <div class="results-scrollable">
+      
+      <!-- Route Alternatives -->
+      <div>
+        <div class="routes-header-row">
+          <div class="routes-header-label">Route Alternatives</div>
+          <div class="routes-count-pill" id="routeCountPill">3 options</div>
+        </div>
+        <div class="routes-container" id="routeCardsContainer">
+          <!-- Dynamically populated via JS -->
+        </div>
+      </div>
+
+      <!-- "Why This Route?" Section -->
+      <div class="why-route-section" id="whyRouteCard" style="display: none;">
+        <div class="why-header">
+          <span>🛡️</span> Safer route found
+        </div>
+        <div class="why-subtitle">
+          This route provides a stronger overall safety profile compared with the available alternatives.
+        </div>
+        <ul class="why-bullets" id="whyBulletsList">
+          <!-- Dynamically populated based on real backend features -->
+        </ul>
+        <button class="btn-view-details" onclick="openSafetyDetailsModal()">
+          View safety details →
+        </button>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- Dedicated Seven-Factor Safety Details Modal -->
+  <div class="modal-overlay" id="safetyDetailsModal">
+    <div class="modal-content-box">
+      <div class="modal-head">
+        <div class="modal-title">
+          <span>🛡️</span> Route Safety Analysis
+        </div>
+        <button class="btn-modal-close" onclick="closeSafetyDetailsModal()">✕</button>
+      </div>
+
+      <div class="factors-list" id="modalFactorsList">
+        <!-- Dynamically generated 7 factors -->
+      </div>
+
+      <div class="modal-footer-note">
+        These factors are combined to calculate the route's overall safety score.
+        Evaluated against verified Hyderabad police stations, emergency hospitals, public transit, and official annual crime statistics.
+      </div>
+    </div>
+  </div>
+
+  <!-- SOS Distress Modal -->
+  <div class="modal-overlay" id="sosModal">
+    <div class="sos-dialog-box">
+      <div class="sos-beacon" onclick="broadcastSOSAlert()">
+        <span>🚨</span>
+        <span>SOS</span>
+      </div>
+      <h3>EMERGENCY DISTRESS BROADCAST</h3>
+      <p>
+        Tap the red SOS button to broadcast your GPS coordinates to trusted contacts & identify the closest Hyderabad police station.
+      </p>
+
+      <div id="sosAlertStatus" class="sos-status-alert"></div>
+
+      <div class="helplines-grid">
+        <a href="tel:100" class="helpline-link">👮 Police 100</a>
+        <a href="tel:112" class="helpline-link">🚨 Emergency 112</a>
+        <a href="tel:9490616555" class="helpline-link">🛡️ SHE Teams</a>
+        <a href="tel:181" class="helpline-link">👩 Women 181</a>
+      </div>
+
+      <button class="btn-dismiss-sos" onclick="closeSOSModal()">Dismiss Emergency Screen</button>
+    </div>
+  </div>
+
+  <!-- Core JavaScript Application Logic -->
+  <script>
+    // =========================================================================
+    // 1. Map Initialization
+    // =========================================================================
+    const HYD_CENTER = [17.3850, 78.4867];
+    const map = L.map('map', { zoomControl: true }).setView(HYD_CENTER, 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors | SafeHer AI'
+    }).addTo(map);
+
+    let routePolylines = [];
+    let waypointLayerGroup = L.layerGroup().addTo(map);
+    let currentPlan = null;
+    let selectedRoute = null;
+
+    // Safety Layer Visibility State
+    const layerVisibility = {
+      police: true,
+      hospital: true,
+      transit: true,
+      hazard: true
+    };
+    let amenityMarkers = [];
+
+    // Load initial safety points
+    loadCivicLayers(HYD_CENTER[0], HYD_CENTER[1]);
+
+    function loadCivicLayers(lat, lon) {
+      fetch(`/api/v1/safety/nearby-safe-spots?lat=${lat}&lon=${lon}&radius_km=10.0&limit=10`)
+        .then(r => r.json())
+        .then(data => {
+          amenityMarkers.forEach(m => map.removeLayer(m));
+          amenityMarkers = [];
+
+          // Police Stations
+          if (data.police_stations) {
+            data.police_stations.forEach(ps => {
+              const m = L.circleMarker([ps.latitude, ps.longitude], {
+                radius: 6,
+                fillColor: '#2563eb',
+                color: '#ffffff',
+                weight: 1.5,
+                opacity: 1,
+                fillOpacity: 0.85,
+                layerType: 'police'
+              }).bindPopup(`<b>👮 ${ps.name}</b><br>Zone: ${ps.zone_or_circle || 'Hyderabad'}<br>Helpline: 100`);
+              if (layerVisibility.police) m.addTo(map);
+              amenityMarkers.push(m);
+            });
+          }
+
+          // Hospitals
+          if (data.hospitals) {
+            data.hospitals.forEach(h => {
+              const m = L.circleMarker([h.latitude, h.longitude], {
+                radius: 6,
+                fillColor: '#dc2626',
+                color: '#ffffff',
+                weight: 1.5,
+                opacity: 1,
+                fillOpacity: 0.85,
+                layerType: 'hospital'
+              }).bindPopup(`<b>🏥 ${h.name}</b><br>Emergency Healthcare`);
+              if (layerVisibility.hospital) m.addTo(map);
+              amenityMarkers.push(m);
+            });
+          }
+
+          // Public Transit
+          if (data.transit_stations) {
+            data.transit_stations.forEach(t => {
+              const m = L.circleMarker([t.latitude, t.longitude], {
+                radius: 5,
+                fillColor: '#f97316',
+                color: '#ffffff',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.85,
+                layerType: 'transit'
+              }).bindPopup(`<b>🚇 ${t.name}</b><br>${t.category}`);
+              if (layerVisibility.transit) m.addTo(map);
+              amenityMarkers.push(m);
+            });
+          }
+
+          // Accident Black Spots (Hazard)
+          if (data.accident_blackspots) {
+            data.accident_blackspots.forEach(bs => {
+              const m = L.circleMarker([bs.latitude, bs.longitude], {
+                radius: 6,
+                fillColor: '#9333ea',
+                color: '#facc15',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.85,
+                layerType: 'hazard'
+              }).bindPopup(`<b>⚠️ Road Accident Black Spot</b><br>${bs.name}`);
+              if (layerVisibility.hazard) m.addTo(map);
+              amenityMarkers.push(m);
+            });
+          }
+        })
+        .catch(err => console.error("Layer loading error:", err));
+    }
+
+    function toggleLayer(type) {
+      layerVisibility[type] = !layerVisibility[type];
+      const chip = document.getElementById('chip' + type.charAt(0).toUpperCase() + type.slice(1));
+      if (chip) {
+        if (layerVisibility[type]) chip.classList.add('active');
+        else chip.classList.remove('active');
+      }
+
+      amenityMarkers.forEach(m => {
+        if (m.options.layerType === type) {
+          if (layerVisibility[type]) m.addTo(map);
+          else map.removeLayer(m);
+        }
+      });
+    }
+
+    // =========================================================================
+    // 2. Input Utilities & Autocomplete
+    // =========================================================================
+    function setupAutocomplete(inputId, dropdownId) {
+      const input = document.getElementById(inputId);
+      const dropdown = document.getElementById(dropdownId);
+      let debounceTimer = null;
+
+      input.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const q = input.value.trim();
+        if (q.length < 2) {
+          dropdown.style.display = 'none';
+          dropdown.innerHTML = '';
+          return;
+        }
+
+        debounceTimer = setTimeout(() => {
+          fetch(`/api/v1/places/autocomplete?q=${encodeURIComponent(q)}&limit=5`)
+            .then(r => r.json())
+            .then(items => {
+              if (!items || items.length === 0) {
+                dropdown.style.display = 'none';
+                return;
+              }
+              dropdown.innerHTML = items.map(item => `
+                <div class="ac-item" onclick="choosePlace('${inputId}', '${dropdownId}', '${item.name.replace(/'/g, "\\'")}')">
+                  <span class="ac-name">📍 ${item.name}</span>
+                  <span class="ac-category">${item.category}</span>
+                </div>
+              `).join('');
+              dropdown.style.display = 'block';
+            })
+            .catch(() => { dropdown.style.display = 'none'; });
+        }, 180);
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+          dropdown.style.display = 'none';
+        }
+      });
+    }
+
+    function choosePlace(inputId, dropdownId, name) {
+      document.getElementById(inputId).value = name;
+      document.getElementById(dropdownId).style.display = 'none';
+    }
+
+    setupAutocomplete('fromInput', 'fromAutocomplete');
+    setupAutocomplete('toInput', 'toAutocomplete');
+
+    function clearField(id) {
+      document.getElementById(id).value = '';
+      document.getElementById(id).focus();
+    }
+
+    function swapInputs() {
+      const fromEl = document.getElementById('fromInput');
+      const toEl = document.getElementById('toInput');
+      const temp = fromEl.value;
+      fromEl.value = toEl.value;
+      toEl.value = temp;
+      if (fromEl.value && toEl.value) {
+        executeRouteSearch();
+      }
+    }
+
+    function setDestination(placeName) {
+      document.getElementById('toInput').value = placeName;
+      executeRouteSearch();
+    }
+
+    // =========================================================================
+    // 3. Route Search & Backend Evaluation
+    // =========================================================================
+    function executeRouteSearch() {
+      const fromVal = document.getElementById('fromInput').value.trim();
+      const toVal = document.getElementById('toInput').value.trim();
+      if (!fromVal || !toVal) return;
+
+      const btn = document.getElementById('btnFindRoutes');
+      btn.innerText = 'SEARCHING SAFER ROUTES...';
+      btn.disabled = true;
+
+      fetch('/api/v1/routes/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: { address: fromVal },
+          destination: { address: toVal },
+          travel_mode: 'driving',
+          alternatives: true
+        })
+      })
+      .then(r => {
+        if (!r.ok) throw new Error("HTTP error " + r.status);
+        return r.json();
+      })
+      .then(data => {
+        btn.innerText = 'FIND SAFER ROUTES';
+        btn.disabled = false;
+        currentPlan = data;
+        renderRoutes(data);
+      })
+      .catch(err => {
+        btn.innerText = 'FIND SAFER ROUTES';
+        btn.disabled = false;
+        alert("Unable to calculate routes: " + err.message);
+      });
+    }
+
+    // =========================================================================
+    // 4. Render Route Alternatives & Map Polylines
+    // =========================================================================
+    function renderRoutes(plan) {
+      // Clear previous polylines & markers
+      routePolylines.forEach(p => map.removeLayer(p));
+      routePolylines = [];
+      waypointLayerGroup.clearLayers();
+
+      const orig = [plan.origin.latitude, plan.origin.longitude];
+      const dest = [plan.destination.latitude, plan.destination.longitude];
+
+      // Clean Origin Pin 'A'
+      const originIcon = L.divIcon({
+        className: 'custom-pin pin-origin',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+        html: 'A'
+      });
+      L.marker(orig, { icon: originIcon })
+        .bindPopup(`<b>Starting Point</b><br>${plan.origin_name || plan.origin.address}`)
+        .addTo(waypointLayerGroup);
+
+      // Clean Destination Pin 'B'
+      const destIcon = L.divIcon({
+        className: 'custom-pin pin-destination',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+        html: 'B'
+      });
+      L.marker(dest, { icon: destIcon })
+        .bindPopup(`<b>Destination</b><br>${plan.destination_name || plan.destination.address}`)
+        .addTo(waypointLayerGroup);
+
+      // Render Route Alternative Cards
+      const container = document.getElementById('routeCardsContainer');
+      container.innerHTML = '';
+      document.getElementById('routeCountPill').innerText = `${plan.routes.length} options`;
+
+      const allCoords = [];
+      const saferRoute = plan.routes.find(r => r.is_recommended_safer) || plan.routes[0];
+
+      plan.routes.forEach(route => {
+        const isSafer = route.is_recommended_safer;
+        const isFastest = route.is_fastest;
+        const latlngs = route.polyline_coords.map(c => [c.latitude, c.longitude]);
+        allCoords.push(...latlngs);
+
+        // Map Polyline Styling
+        const baseColor = isSafer ? '#059669' : (isFastest ? '#2563eb' : '#475569');
+        const poly = L.polyline(latlngs, {
+          color: baseColor,
+          weight: isSafer ? 6 : 4,
+          opacity: isSafer ? 0.95 : 0.45,
+          lineJoin: 'round',
+          lineCap: 'round',
+          routeId: route.route_id,
+          isSafer: isSafer,
+          isFastest: isFastest
+        }).addTo(map);
+
+        poly.on('click', () => chooseRoute(route.route_id));
+        routePolylines.push(poly);
+
+        // Determine Category Title
+        let categoryClass = 'type-alt';
+        let categoryTitleHtml = '';
+        if (isSafer) {
+          categoryClass = 'type-safer';
+          categoryTitleHtml = '<span class="category-title title-safer">🛡️ SAFER ROUTE</span>';
+        } else if (isFastest) {
+          categoryClass = 'type-fastest';
+          categoryTitleHtml = '<span class="category-title title-fastest">⚡ FASTEST ROUTE</span>';
+        } else {
+          categoryTitleHtml = '<span class="category-title title-alt">ALTERNATIVE ROUTE</span>';
+        }
+
+        // Score Badge
+        const scoreClass = route.safety_score >= 75 ? 'high' : (route.safety_score >= 55 ? 'moderate' : 'lower');
+
+        // Dynamic Real-Data Bullet Points
+        const bulletsHtml = generateCardBullets(route, isSafer, isFastest, saferRoute);
+
+        // Card Element
+        const card = document.createElement('div');
+        card.className = `route-card ${categoryClass}`;
+        card.id = `card_${route.route_id}`;
+        card.onclick = () => chooseRoute(route.route_id);
+
+        card.innerHTML = `
+          <div class="card-top-row">
+            ${categoryTitleHtml}
+            <div class="score-chip ${scoreClass}">
+              Safety: ${route.safety_score.toFixed(1)} / 100
+            </div>
+          </div>
+          <div class="metrics-row">
+            <span>${Math.round(route.duration_min)} min</span>
+            <span class="meta-sep">·</span>
+            <span class="meta-dist">${route.distance_km.toFixed(1)} km</span>
+          </div>
+          <ul class="card-bullets-list">
+            ${bulletsHtml}
+          </ul>
+        `;
+        container.appendChild(card);
+      });
+
+      // Fit map viewport smoothly to show all routes
+      if (allCoords.length > 0) {
+        map.fitBounds(L.latLngBounds(allCoords), {
+          paddingTopLeft: [30, 30],
+          paddingBottomRight: [420, 30],
+          maxZoom: 15
+        });
+      }
+
+      // Default select the recommended safer route
+      if (plan.recommended_safer_route_id) {
+        chooseRoute(plan.recommended_safer_route_id);
+      } else if (plan.routes.length > 0) {
+        chooseRoute(plan.routes[0].route_id);
+      }
+    }
+
+    // Generate Natural Bullet Points based on Real Route Data
+    function generateCardBullets(route, isSafer, isFastest, saferRoute) {
+      const raw = route.raw_features;
+      const pts = route.contributions;
+      const bullets = [];
+
+      if (isSafer) {
+        if (raw.police_within_1km_count > 0 || pts.police_pts >= 18) {
+          bullets.push(`<li class="pro">✓ More police coverage</li>`);
+        }
+        if (raw.min_hospital_dist_km <= 1.5 || pts.medical_pts >= 12) {
+          bullets.push(`<li class="pro">✓ Better emergency access</li>`);
+        }
+        if (raw.blackspot_count === 0) {
+          bullets.push(`<li class="pro">✓ Fewer identified accident-prone areas</li>`);
+        } else {
+          bullets.push(`<li class="pro">✓ Avoids major road hazards</li>`);
+        }
+      } else if (isFastest) {
+        bullets.push(`<li class="pro">✓ Saves travel time</li>`);
+        if (route.safety_score < saferRoute.safety_score) {
+          bullets.push(`<li class="warn">⚠ Slightly lower safety coverage</li>`);
+        }
+        if (raw.blackspot_count > 0) {
+          bullets.push(`<li class="warn">⚠ Crosses accident black spot vicinity</li>`);
+        }
+      } else {
+        bullets.push(`<li class="pro">✓ Different road corridor</li>`);
+        bullets.push(`<li class="warn">⚠ Different safety conditions</li>`);
+      }
+
+      return bullets.join('');
+    }
+
+    // =========================================================================
+    // 5. Route Selection & Map Highlighting
+    // =========================================================================
+    function chooseRoute(routeId) {
+      if (!currentPlan) return;
+      selectedRoute = currentPlan.routes.find(r => r.route_id === routeId);
+      if (!selectedRoute) return;
+
+      // Update Card Active States
+      document.querySelectorAll('.route-card').forEach(c => c.classList.remove('is-selected'));
+      const activeCard = document.getElementById(`card_${routeId}`);
+      if (activeCard) {
+        activeCard.classList.add('is-selected');
+        activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      // Update Map Polylines (Selected route = thick & vivid, others = muted)
+      routePolylines.forEach(p => {
+        if (p.options.routeId === routeId) {
+          const color = p.options.isSafer ? '#059669' : (p.options.isFastest ? '#2563eb' : '#4338ca');
+          p.setStyle({
+            color: color,
+            weight: 7,
+            opacity: 1
+          });
+          p.bringToFront();
+        } else {
+          p.setStyle({
+            color: '#94a3b8',
+            weight: 3.5,
+            opacity: 0.4
+          });
+        }
+      });
+
+      // Update "Why this route?" section
+      updateWhyThisRoute(selectedRoute);
+    }
+
+    // =========================================================================
+    // 6. "Why This Route?" Section Population
+    // =========================================================================
+    function updateWhyThisRoute(route) {
+      const card = document.getElementById('whyRouteCard');
+      const list = document.getElementById('whyBulletsList');
+      card.style.display = 'block';
+
+      const raw = route.raw_features;
+      const pts = route.contributions;
+      const items = [];
+
+      // Police Proximity
+      if (raw.police_within_1km_count > 0 || pts.police_pts > 15) {
+        items.push(`<li><span class="check-icon">✓</span> Police stations nearby (${raw.police_within_1km_count} within 1 km)</li>`);
+      } else {
+        items.push(`<li><span class="check-icon">✓</span> Regular police patrols monitored along corridor</li>`);
+      }
+
+      // Emergency Healthcare
+      if (raw.min_hospital_dist_km <= 2.5) {
+        items.push(`<li><span class="check-icon">✓</span> Emergency facilities along the way (${raw.min_hospital_dist_km.toFixed(1)} km to closest hospital)</li>`);
+      } else {
+        items.push(`<li><span class="check-icon">✓</span> Healthcare infrastructure accessible</li>`);
+      }
+
+      // Public Transport
+      if (raw.transit_count_within_500m > 0) {
+        items.push(`<li><span class="check-icon">✓</span> Public transport available along the route (${raw.transit_count_within_500m} stops/stations)</li>`);
+      } else {
+        items.push(`<li><span class="check-icon">✓</span> Public transport hubs accessible</li>`);
+      }
+
+      // Accident Black Spots
+      if (raw.blackspot_count === 0) {
+        items.push(`<li><span class="check-icon">✓</span> Avoids identified accident-prone locations</li>`);
+      } else {
+        items.push(`<li><span class="check-icon">⚠</span> Passes near ${raw.blackspot_count} accident-prone location(s)</li>`);
+      }
+
+      // Crime Exposure
+      if (raw.traversed_zones && raw.traversed_zones.length > 0) {
+        items.push(`<li><span class="check-icon">✓</span> Considers crime levels of areas crossed (${raw.traversed_zones.slice(0, 2).join(', ')})</li>`);
+      }
+
+      // Route Efficiency
+      items.push(`<li><span class="check-icon">✓</span> Keeps the route reasonably direct</li>`);
+
+      list.innerHTML = items.join('');
+    }
+
+    // =========================================================================
+    // 7. Dedicated Seven-Factor Safety Details Modal
+    // =========================================================================
+    function openSafetyDetailsModal() {
+      if (!selectedRoute) return;
+      const modal = document.getElementById('safetyDetailsModal');
+      const list = document.getElementById('modalFactorsList');
+
+      const pts = selectedRoute.contributions;
+      const raw = selectedRoute.raw_features;
+
+      const factors = [
+        {
+          name: '🛡️ Police Accessibility',
+          awarded: pts.police_pts,
+          max: 25.0,
+          desc: 'Nearby police support considered along the route.',
+          detail: `Average distance along corridor: ${raw.avg_police_dist_km.toFixed(2)} km (${raw.police_within_1km_count} stations within 1 km)`
+        },
+        {
+          name: '🏥 Emergency Healthcare',
+          awarded: pts.medical_pts,
+          max: 15.0,
+          desc: 'Nearby emergency healthcare facilities considered.',
+          detail: `Shortest distance to registered hospital: ${raw.min_hospital_dist_km.toFixed(2)} km`
+        },
+        {
+          name: '🚇 Public Transport',
+          awarded: pts.transit_pts,
+          max: 15.0,
+          desc: 'Public transport infrastructure considered along the route.',
+          detail: `${raw.transit_count_within_500m} metro and bus stations within 500m buffer`
+        },
+        {
+          name: '🛣️ Road Type',
+          awarded: pts.arterial_pts,
+          max: 15.0,
+          desc: 'Road hierarchy and major-road presence considered.',
+          detail: `${raw.arterial_length_km.toFixed(2)} km along primary or arterial roadways`
+        },
+        {
+          name: '🚨 Crime Exposure',
+          awarded: pts.crime_compliance_pts,
+          max: 15.0,
+          desc: 'Reported crime levels of areas crossed are considered.',
+          detail: `Police zones crossed: ${raw.traversed_zones.join(', ')}`
+        },
+        {
+          name: '⚠️ Accident-Prone Areas',
+          awarded: pts.blackspot_compliance_pts,
+          max: 10.0,
+          desc: 'Identified accident black spots are considered.',
+          detail: raw.blackspot_count === 0 ? 'Zero identified accident black spots along path' : `Passes near ${raw.blackspot_count} collision black spots`
+        },
+        {
+          name: '📍 Route Efficiency',
+          awarded: pts.exposure_compliance_pts,
+          max: 5.0,
+          desc: 'Route directness and unnecessary detours are considered.',
+          detail: 'Penalizes indirect or winding detours that prolong nighttime travel'
+        }
+      ];
+
+      list.innerHTML = factors.map(f => {
+        const pct = Math.min(100, Math.max(0, (f.awarded / f.max) * 100));
+        return `
+          <div class="factor-item">
+            <div class="factor-item-header">
+              <span class="factor-name">${f.name}</span>
+              <span class="factor-pts">${f.awarded.toFixed(1)} / ${f.max.toFixed(1)} pts</span>
+            </div>
+            <div class="factor-desc">${f.desc}</div>
+            <div class="factor-bar-track">
+              <div class="factor-bar-fill" style="width: ${pct}%;"></div>
+            </div>
+            <div style="font-size: 10.5px; color: #64748b; margin-top: 4px;">${f.detail}</div>
+          </div>
+        `;
+      }).join('');
+
+      modal.classList.add('open');
+    }
+
+    function closeSafetyDetailsModal() {
+      document.getElementById('safetyDetailsModal').classList.remove('open');
+    }
+
+    // =========================================================================
+    // 8. SOS Emergency Flow
+    // =========================================================================
+    function openSOSModal() {
+      document.getElementById('sosModal').classList.add('open');
+    }
+
+    function closeSOSModal() {
+      document.getElementById('sosModal').classList.remove('open');
+    }
+
+    function broadcastSOSAlert() {
+      const statusBox = document.getElementById('sosAlertStatus');
+      statusBox.innerHTML = 'Broadcasting emergency GPS coordinates to Telangana Police & Emergency Contacts...';
+      statusBox.style.display = 'block';
+
+      fetch('/api/v1/sos/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          latitude: HYD_CENTER[0],
+          longitude: HYD_CENTER[1],
+          battery_level: 90,
+          message: 'EMERGENCY: Immediate safety assistance requested!'
+        })
+      })
+      .then(r => r.json())
+      .then(res => {
+        statusBox.innerHTML = `
+          ✅ <strong>ALERT DISPATCHED:</strong> ${res.alert_id}<br>
+          🏢 <strong>Nearest Police Desk:</strong> ${res.nearest_police_station.name}<br>
+          📲 <strong>Emergency Contacts Alerted:</strong> ${res.dispatched_contacts_count} contacts
+        `;
+      })
+      .catch(() => {
+        statusBox.innerHTML = '⚠️ Signal recorded. Please dial 100 or 112 immediately!';
+      });
+    }
+
+    // Automatically load default corridor on initial page load
+    setTimeout(() => {
+      executeRouteSearch();
+    }, 350);
+  </script>
+</body>
+</html>
