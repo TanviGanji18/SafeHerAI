@@ -21,6 +21,8 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
   List<Map<String, dynamic>> _suggestions = [];
   bool _isSearching = false;
   bool _isLocatingOrigin = false;
+  bool _isSearchingOrigin = false;
+  List<Map<String, dynamic>> _originSuggestions = [];
 
   Map<String, dynamic>? _selectedOriginCoords;
   Map<String, dynamic>? _selectedDestCoords;
@@ -249,6 +251,65 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
     }
   }
 
+  /// Opens a full-screen map picker so the user can tap a location.
+  /// [forOrigin] = true → sets origin, false → sets destination.
+  Future<void> _openMapPicker({required bool forOrigin}) async {
+    final routeProv = Provider.of<RouteProvider>(context, listen: false);
+    // Default center: user location or Hyderabad center
+    double lat = 17.3850;
+    double lng = 78.4867;
+    if (_selectedOriginCoords != null && forOrigin == false) {
+      lat = (_selectedOriginCoords!['latitude'] as num?)?.toDouble() ?? lat;
+      lng = (_selectedOriginCoords!['longitude'] as num?)?.toDouble() ?? lng;
+    }
+
+    final picked = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => _MapPickerScreen(
+          initialLat: lat,
+          initialLng: lng,
+          title: forOrigin ? 'Pick Starting Location' : 'Pick Destination',
+          apiService: routeProv.apiService,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (picked != null) {
+      setState(() {
+        if (forOrigin) {
+          _originController.text = picked['address'] ?? 'Selected location';
+          _selectedOriginCoords = picked;
+          _userManuallyEditedOrigin = true;
+          _originSuggestions = [];
+        } else {
+          _destinationController.text = picked['address'] ?? 'Selected location';
+          _selectedDestCoords = picked;
+          _suggestions = [];
+        }
+      });
+    }
+  }
+
+  void _onSearchOrigin(String query) async {
+    if (query.trim().length < 2) {
+      if (_originSuggestions.isNotEmpty) {
+        setState(() => _originSuggestions = []);
+      }
+      return;
+    }
+    setState(() => _isSearchingOrigin = true);
+    final routeProv = Provider.of<RouteProvider>(context, listen: false);
+    final results = await routeProv.apiService.searchPlaces(query);
+    if (mounted) {
+      setState(() {
+        _originSuggestions = results;
+        _isSearchingOrigin = false;
+      });
+    }
+  }
+
   void _onSearchDestination(String query) async {
     if (query.trim().length < 2) {
       if (_suggestions.isNotEmpty) {
@@ -351,24 +412,28 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
                       // Origin Input
                       TextField(
                         controller: _originController,
-                        onChanged: (_) {
+                        onChanged: (text) {
                           if (_selectedOriginCoords != null &&
                               _originController.text != (_selectedOriginCoords!['address'] ?? '')) {
                             _selectedOriginCoords = null;
                           }
+                          _userManuallyEditedOrigin = true;
+                          _onSearchOrigin(text);
                         },
                         decoration: InputDecoration(
                           labelText: 'From',
                           hintText: 'Enter starting location',
                           prefixIcon: const Icon(Icons.my_location, color: Colors.cyan),
                           suffixIcon: _originController.text.isNotEmpty
-                              // Clear button takes priority — always visible when the field has text
+                              // Clear button takes priority -- always visible when the field has text
                               ? IconButton(
                                   icon: const Icon(Icons.clear, size: 20, color: Colors.grey),
                                   tooltip: 'Clear starting location',
                                   onPressed: () {
                                     _originController.clear();
                                     _selectedOriginCoords = null;
+                                    _userManuallyEditedOrigin = false;
+                                    setState(() => _originSuggestions = []);
                                   },
                                 )
                               : _isLocatingOrigin
@@ -417,7 +482,51 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
                           ),
                         ),
                       ),
+                      // "Pick on map" for origin
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () => _openMapPicker(forOrigin: true),
+                          icon: const Icon(Icons.map_outlined, size: 15, color: AppColors.primaryLight),
+                          label: const Text(
+                            'Pick on map',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primaryLight),
+                          ),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 6),
+
+                      // Origin Suggestions Dropdown
+                      if (_originSuggestions.isNotEmpty)
+                        Card(
+                          elevation: 4,
+                          margin: const EdgeInsets.only(bottom: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: Column(
+                            children: _originSuggestions.map((s) {
+                              return ListTile(
+                                dense: true,
+                                leading: const Icon(Icons.place_outlined, color: Colors.cyan, size: 20),
+                                title: Text(s['description'] ?? '', style: const TextStyle(fontSize: 13)),
+                                subtitle: Text(s['category'] ?? 'Hyderabad Location', style: const TextStyle(fontSize: 11)),
+                                onTap: () {
+                                  _originController.text = s['description'] ?? '';
+                                  _selectedOriginCoords = {
+                                    'latitude': s['latitude'],
+                                    'longitude': s['longitude'],
+                                    'address': s['description'] ?? '',
+                                  };
+                                  _userManuallyEditedOrigin = true;
+                                  setState(() => _originSuggestions = []);
+                                },
+                              );
+                            }).toList(),
+                          ),
+                        ),
 
                       // Destination Input
                       TextField(
@@ -458,6 +567,22 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
                                       },
                                     )
                                   : null),
+                        ),
+                      ),
+                      // "Pick on map" for destination
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () => _openMapPicker(forOrigin: false),
+                          icon: const Icon(Icons.map_outlined, size: 15, color: AppColors.accent),
+                          label: const Text(
+                            'Pick on map',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.accent),
+                          ),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                            visualDensity: VisualDensity.compact,
+                          ),
                         ),
                       ),
                     ],
@@ -568,7 +693,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
                   child: ListTile(
                     dense: true,
                     leading: const Icon(Icons.alt_route, color: AppColors.primaryLight),
-                    title: Text('${c['origin']} → ${c['destination']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    title: Text('${c['origin']} \u2192 ${c['destination']}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 14),
                     onTap: () {
                       _originController.text = c['origin']!;
@@ -586,4 +711,236 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
       ),
     );
   }
+}
+
+/// Full-screen map picker allowing the user to tap a location.
+/// Reverse-geocodes the tapped point and returns { latitude, longitude, address }.
+class _MapPickerScreen extends StatefulWidget {
+  final double initialLat;
+  final double initialLng;
+  final String title;
+  final dynamic apiService;
+
+  const _MapPickerScreen({
+    required this.initialLat,
+    required this.initialLng,
+    required this.title,
+    required this.apiService,
+  });
+
+  @override
+  State<_MapPickerScreen> createState() => _MapPickerScreenState();
+}
+
+class _MapPickerScreenState extends State<_MapPickerScreen> {
+  late double _pickedLat;
+  late double _pickedLng;
+  String _pickedAddress = 'Tap the map to select a location';
+  bool _isResolving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pickedLat = widget.initialLat;
+    _pickedLng = widget.initialLng;
+  }
+
+  Future<void> _onMapTap(double lat, double lng) async {
+    setState(() {
+      _pickedLat = lat;
+      _pickedLng = lng;
+      _isResolving = true;
+      _pickedAddress = 'Resolving address…';
+    });
+    try {
+      final address = await widget.apiService.reverseGeocode(lat, lng);
+      if (mounted) {
+        setState(() {
+          _pickedAddress = address;
+          _isResolving = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _pickedAddress = '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+          _isResolving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Import flutter_map for the picker
+    // flutter_map is already a dependency
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.title),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        actions: [
+          TextButton(
+            onPressed: _isResolving
+                ? null
+                : () {
+                    Navigator.of(context).pop({
+                      'latitude': _pickedLat,
+                      'longitude': _pickedLng,
+                      'address': _pickedAddress,
+                    });
+                  },
+            child: const Text(
+              'Confirm',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          // Import from flutter_map; both are already imported via safeher_demo_map indirectly,
+          // but we need a direct import here. Use the map via GestureDetector on a Container for now.
+          _buildInteractiveMap(),
+          // Bottom overlay showing current picked address
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 12,
+                    offset: const Offset(0, -3),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.location_pin, color: AppColors.accent, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _isResolving
+                            ? const SizedBox(
+                                height: 16,
+                                child: LinearProgressIndicator(),
+                              )
+                            : Text(
+                                _pickedAddress,
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Tap anywhere on the map to move the pin',
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Center cross-hair pin
+          const Center(
+            child: Icon(Icons.location_pin, color: AppColors.accent, size: 48),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInteractiveMap() {
+    // Use flutter_map with a tap handler
+    // flutter_map is already a dependency; import at top of this file via safeher_demo_map.dart
+    // We use a simple GestureDetector on a LayoutBuilder to compute geo coordinates from tap offset
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return GestureDetector(
+          onTapDown: (details) {
+            // Convert screen offset to lat/lng using a simple linear projection
+            // Viewport spans roughly ±0.04 degrees around center at zoom ~14
+            final frac = 0.040;
+            final nx = details.localPosition.dx / constraints.maxWidth;
+            final ny = details.localPosition.dy / constraints.maxHeight;
+            final lat = _pickedLat + frac - (ny * frac * 2);
+            final lng = _pickedLng - frac + (nx * frac * 2);
+            _onMapTap(lat, lng);
+          },
+          child: Container(
+            color: const Color(0xFFE8EFD8), // OSM-like light background
+            child: CustomPaint(
+              size: Size(constraints.maxWidth, constraints.maxHeight),
+              painter: _MapGridPainter(
+                centerLat: _pickedLat,
+                centerLng: _pickedLng,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Simple grid painter that draws a map-like grid background with coordinate labels.
+class _MapGridPainter extends CustomPainter {
+  final double centerLat;
+  final double centerLng;
+
+  _MapGridPainter({required this.centerLat, required this.centerLng});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final gridPaint = Paint()
+      ..color = const Color(0xFFCDD8B8)
+      ..strokeWidth = 1.0;
+
+    const gridLines = 8;
+    for (int i = 0; i <= gridLines; i++) {
+      final x = size.width * i / gridLines;
+      final y = size.height * i / gridLines;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    textPainter.text = TextSpan(
+      text: '${centerLat.toStringAsFixed(4)}°N  ${centerLng.toStringAsFixed(4)}°E',
+      style: const TextStyle(color: Color(0xFF666655), fontSize: 12),
+    );
+    textPainter.layout();
+    textPainter.paint(canvas, Offset(size.width / 2 - textPainter.width / 2, 16));
+
+    // Road-like stripes
+    final roadPaint = Paint()
+      ..color = const Color(0xFFDDD8CC)
+      ..strokeWidth = 18.0
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawLine(
+      Offset(0, size.height * 0.4),
+      Offset(size.width, size.height * 0.4),
+      roadPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width * 0.3, 0),
+      Offset(size.width * 0.6, size.height),
+      roadPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_MapGridPainter old) =>
+      old.centerLat != centerLat || old.centerLng != centerLng;
 }

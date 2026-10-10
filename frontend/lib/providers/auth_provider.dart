@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
@@ -8,14 +9,80 @@ class AuthProvider with ChangeNotifier {
   final ApiService apiService;
   UserProfile? _user;
   bool _isLoading = false;
+  bool _isInitialized = false;
   String? _errorMessage;
 
-  AuthProvider({required this.apiService});
+  final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+
+  final Future<String?> Function()? firebaseTokenResolver;
+  final bool Function()? firebaseUserCheck;
+
+  AuthProvider({
+    required this.apiService,
+    this.firebaseTokenResolver,
+    this.firebaseUserCheck,
+  });
 
   UserProfile? get user => _user;
   bool get isAuthenticated => _user != null;
   bool get isLoading => _isLoading;
+  bool get isInitialized => _isInitialized;
   String? get errorMessage => _errorMessage;
+
+  /// Restores persistent Firebase Authentication session on app launch
+  /// and synchronizes with the backend session.
+  Future<bool> initializeAuth() async {
+    _isLoading = true;
+    _errorMessage = null;
+
+    try {
+      // 1. Check if an explicit token resolver is provided (e.g. testing or custom auth)
+      if (firebaseTokenResolver != null) {
+        final token = await firebaseTokenResolver!();
+        if (token != null && token.isNotEmpty) {
+          final res = await apiService.authenticateFirebase(token);
+          _user = res.user;
+          _isInitialized = true;
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        }
+      } else {
+        // 2. Production Firebase Authentication session restoration
+        if (!FirebaseService.isAvailable) {
+          await FirebaseService.initializeIfPossible();
+        }
+
+        if (FirebaseService.isAvailable) {
+          final currentUser = FirebaseAuth.instance.currentUser;
+          if (currentUser != null) {
+            final idToken = await currentUser.getIdToken();
+            if (idToken != null && idToken.isNotEmpty) {
+              final res = await apiService.authenticateFirebase(idToken);
+              _user = res.user;
+              _isInitialized = true;
+              _isLoading = false;
+              notifyListeners();
+              return true;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[AuthProvider] Session restoration note: $e');
+      _errorMessage = 'Could not restore previous session: ${e.toString().replaceAll("Exception: ", "")}';
+      // Do not treat failed backend exchange as authenticated session
+      _user = null;
+      apiService.authToken = null;
+    } finally {
+      _isInitialized = true;
+      _isLoading = false;
+      notifyListeners();
+    }
+    return false;
+  }
+
+
 
   String _mapFirebaseAuthError(FirebaseAuthException e) {
     switch (e.code) {
@@ -240,6 +307,56 @@ if (!isGuest && phone != null && phone.trim().isNotEmpty) {
     }
   }
 
+  /// P6: Sign in with Google.
+  /// Initiates the Google sign-in flow, exchanges the credential with Firebase,
+  /// then authenticates with the SafeHer backend.
+  Future<bool> signInWithGoogle() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      // Trigger Google Sign-In flow
+      final googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        // User cancelled the flow
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Sign in to Firebase with the Google credential
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      final firebaseUser = userCredential.user;
+      if (firebaseUser == null) throw Exception('Google sign-in failed: no Firebase user returned.');
+
+      // Get ID token and authenticate with the backend
+      final idToken = await firebaseUser.getIdToken();
+      if (idToken == null || idToken.isEmpty) {
+        throw Exception('Failed to obtain Firebase ID token.');
+      }
+      final result = await apiService.authenticateFirebase(idToken);
+
+      _user = result.user;
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('[AuthProvider] Google Sign-In error: $e');
+      _errorMessage = 'Google sign-in failed. Please try again.';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> logout() async {
     try {
       if (FirebaseService.isAvailable) {
@@ -248,6 +365,9 @@ if (!isGuest && phone != null && phone.trim().isNotEmpty) {
     } catch (e) {
       debugPrint('[AuthProvider] Firebase signOut note: $e');
     }
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {}
     _user = null;
     apiService.authToken = null;
     notifyListeners();

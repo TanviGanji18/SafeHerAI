@@ -1,4 +1,4 @@
-name: safeher_ai
+﻿name: safeher_ai
 description: "SafeHer AI - Women Safety and Route Recommendation Mobile App for Hyderabad"
 publish_to: "none"
 version: 1.0.0+1
@@ -30,6 +30,12 @@ dependencies:
   url_launcher: ^6.2.6
   cupertino_icons: ^1.0.6
   geolocator: ^12.0.0
+
+  # P5: Offline-local journey persistence
+  shared_preferences: ^2.3.2
+
+  # P6: Google Sign-In
+  google_sign_in: ^6.2.1
 
 dev_dependencies:
   flutter_test:

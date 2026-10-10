@@ -16,6 +16,11 @@ import 'package:safeher_ai/models/route_model.dart';
 import 'package:safeher_ai/providers/route_provider.dart';
 import 'package:safeher_ai/screens/route_planning_screen.dart';
 import 'package:safeher_ai/screens/active_journey_screen.dart';
+import 'package:safeher_ai/models/user_model.dart';
+import 'package:safeher_ai/screens/splash_screen.dart';
+import 'package:safeher_ai/screens/login_screen.dart';
+import 'package:safeher_ai/services/local_journey_store.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 
 void main() {
@@ -686,4 +691,245 @@ void main() {
     // 6. Verify old cluttered sentence 'Active Navigation • ' is completely removed
     expect(find.textContaining('Active Navigation •'), findsNothing);
   });
+
+  group('Persistent Authentication Tests', () {
+    test('AuthProvider.initializeAuth restores session when user is authenticated with backend', () async {
+      final mockApi = _MockPersistentApiService(shouldSucceed: true);
+      final authProv = AuthProvider(
+        apiService: mockApi,
+        firebaseTokenResolver: () async => 'mock_firebase_id_token_123',
+      );
+
+      expect(authProv.isAuthenticated, isFalse);
+      expect(authProv.isInitialized, isFalse);
+
+      final success = await authProv.initializeAuth();
+
+      expect(success, isTrue);
+      expect(authProv.isAuthenticated, isTrue);
+      expect(authProv.isInitialized, isTrue);
+      expect(authProv.user?.email, 'persisted_user@safeher.ai');
+      expect(mockApi.authToken, 'mock_restored_jwt_token');
+    });
+
+    test('AuthProvider.initializeAuth handles backend restoration failure safely without claiming authenticated session', () async {
+      final mockApi = _MockPersistentApiService(shouldSucceed: false);
+      final authProv = AuthProvider(
+        apiService: mockApi,
+        firebaseTokenResolver: () async => 'mock_firebase_id_token_123',
+      );
+
+      final success = await authProv.initializeAuth();
+
+      expect(success, isFalse);
+      expect(authProv.isAuthenticated, isFalse);
+      expect(authProv.isInitialized, isTrue);
+      expect(authProv.user, isNull);
+      expect(authProv.errorMessage, isNotNull);
+      expect(authProv.errorMessage, contains('Could not restore previous session'));
+      expect(mockApi.authToken, isNull);
+    });
+
+    test('AuthProvider.logout clears session and resets auth state', () async {
+      final mockApi = _MockPersistentApiService(shouldSucceed: true);
+      final authProv = AuthProvider(
+        apiService: mockApi,
+        firebaseTokenResolver: () async => 'mock_firebase_id_token_123',
+      );
+
+      await authProv.initializeAuth();
+      expect(authProv.isAuthenticated, isTrue);
+
+      await authProv.logout();
+
+      expect(authProv.isAuthenticated, isFalse);
+      expect(authProv.user, isNull);
+      expect(mockApi.authToken, isNull);
+    });
+
+    testWidgets('SplashScreen routes to LoginScreen when unauthenticated startup occurs', (WidgetTester tester) async {
+      final mockApi = _MockPersistentApiService(shouldSucceed: false);
+      final authProv = AuthProvider(
+        apiService: mockApi,
+        firebaseTokenResolver: () async => null,
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: authProv),
+          ],
+          child: const MaterialApp(
+            home: SplashScreen(),
+          ),
+        ),
+      );
+
+      // Verify splash screen branding is shown initially
+      expect(find.text('SafeHer AI'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      // Advance past the 1600ms branding delay
+      await tester.pump(const Duration(milliseconds: 1700));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Must have routed to LoginScreen
+      expect(find.text('Welcome to SafeHer AI'), findsOneWidget);
+      expect(find.text('Sign In'), findsOneWidget);
+    });
+  });
+
+  group('P5 Offline Local Journey Persistence (LocalJourneyStore)', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    test('LocalJourneyStore saves and loads journeys for a user', () async {
+      final store = LocalJourneyStore(userId: 'test_user_01');
+      final j1 = ActiveJourney.fromJson({
+        'journey_id': 'JRN-LOCAL-01',
+        'user_id': 'test_user_01',
+        'origin': {'address': 'Madhapur'},
+        'destination': {'address': 'Hitec City'},
+        'route_summary': 'Cyber Towers Corridor',
+        'distance_km': 3.5,
+        'duration_min': 8.0,
+        'safety_score': 90.0,
+        'safety_tier': 'High Safety Corridor',
+        'start_time': '2026-10-10T10:00:00Z',
+        'status': 'completed',
+      });
+
+      await store.saveJourney(j1);
+      final loaded = await store.loadJourneys();
+      expect(loaded.length, 1);
+      expect(loaded.first.journeyId, 'JRN-LOCAL-01');
+      expect(loaded.first.routeSummary, 'Cyber Towers Corridor');
+    });
+
+    test('LocalJourneyStore isolates journeys by user ID', () async {
+      final storeA = LocalJourneyStore(userId: 'user_a');
+      final storeB = LocalJourneyStore(userId: 'user_b');
+
+      final jA = ActiveJourney.fromJson({
+        'journey_id': 'JRN-A',
+        'user_id': 'user_a',
+        'origin': {'address': 'A'},
+        'destination': {'address': 'B'},
+        'route_summary': 'Route A',
+        'distance_km': 1.0,
+        'duration_min': 5.0,
+        'safety_score': 80.0,
+        'safety_tier': 'Standard',
+        'start_time': '2026-10-10T10:00:00Z',
+        'status': 'completed',
+      });
+
+      await storeA.saveJourney(jA);
+      expect((await storeA.loadJourneys()).length, 1);
+      expect((await storeB.loadJourneys()).length, 0);
+    });
+
+    test('LocalJourneyStore delete and clear operations succeed', () async {
+      final store = LocalJourneyStore(userId: 'test_user_del');
+      final j1 = ActiveJourney.fromJson({
+        'journey_id': 'JRN-DEL-1',
+        'user_id': 'test_user_del',
+        'origin': {'address': 'O'},
+        'destination': {'address': 'D'},
+        'route_summary': 'Corridor',
+        'distance_km': 2.0,
+        'duration_min': 5.0,
+        'safety_score': 80.0,
+        'safety_tier': 'Standard',
+        'start_time': '2026-10-10T10:00:00Z',
+        'status': 'completed',
+      });
+
+      await store.saveJourney(j1);
+      expect((await store.loadJourneys()).length, 1);
+
+      await store.deleteJourney('JRN-DEL-1');
+      expect((await store.loadJourneys()).isEmpty, isTrue);
+    });
+  });
+
+  group('P6 Google Sign-In and LoginScreen UI', () {
+    testWidgets('LoginScreen renders Sign In with Google button', (WidgetTester tester) async {
+      final authProv = AuthProvider(
+        apiService: ApiService(),
+        firebaseTokenResolver: () async => null,
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<AuthProvider>.value(value: authProv),
+          ],
+          child: const MaterialApp(
+            home: LoginScreen(),
+          ),
+        ),
+      );
+
+      expect(find.text('Sign In with Google'), findsOneWidget);
+      expect(find.text('Sign In'), findsOneWidget);
+      expect(find.text('Continue as Guest / Demo Mode'), findsOneWidget);
+    });
+  });
+
+  group('P2 Location Entry UI', () {
+    testWidgets('RoutePlanningScreen provides Pick on map buttons for origin and destination', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<RouteProvider>(create: (_) => RouteProvider(apiService: ApiService())),
+            ChangeNotifierProvider<JourneyProvider>(create: (_) => JourneyProvider(apiService: ApiService())),
+            ChangeNotifierProvider<AuthProvider>(
+              create: (_) => AuthProvider(
+                apiService: ApiService(),
+                firebaseTokenResolver: () async => null,
+              ),
+            ),
+          ],
+          child: const MaterialApp(
+            home: RoutePlanningScreen(),
+          ),
+        ),
+      );
+
+      // Verify Pick on map buttons exist
+      expect(find.text('Pick on map'), findsNWidgets(2));
+    });
+  });
 }
+
+
+class _MockPersistentApiService extends ApiService {
+  final bool shouldSucceed;
+
+  _MockPersistentApiService({
+    this.shouldSucceed = true,
+  });
+
+
+  @override
+  Future<AuthResult> authenticateFirebase(String idToken) async {
+    if (!shouldSucceed) {
+      throw Exception('Backend network connection timed out');
+    }
+    authToken = 'mock_restored_jwt_token';
+    return AuthResult(
+      accessToken: 'mock_restored_jwt_token',
+      tokenType: 'bearer',
+      user: UserProfile(
+        id: 'user_restored_123',
+        email: 'persisted_user@safeher.ai',
+        fullName: 'Restored SafeHer User',
+        phone: '+919876543210',
+        createdAt: '2026-10-10T12:00:00Z',
+      ),
+    );
+  }
+}
+

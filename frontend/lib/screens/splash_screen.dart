@@ -16,19 +16,31 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(milliseconds: 1800), () {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      if (auth.isAuthenticated) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeMapScreen()),
-        );
-      } else {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
-      }
-    });
+    _handleStartupRouting();
   }
+
+  Future<void> _handleStartupRouting() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+
+    // Run brand display delay and authentication session restoration concurrently
+    await Future.wait([
+      Future.delayed(const Duration(milliseconds: 1600)),
+      auth.initializeAuth(),
+    ]);
+
+    if (!mounted) return;
+
+    if (auth.isAuthenticated) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeMapScreen()),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {

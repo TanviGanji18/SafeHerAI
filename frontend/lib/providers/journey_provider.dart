@@ -8,10 +8,12 @@ import '../models/journey_model.dart';
 import '../models/navigation_model.dart';
 import '../models/sos_model.dart';
 import '../services/api_service.dart';
+import '../services/local_journey_store.dart';
 import '../services/firebase_service.dart';
 
 class JourneyProvider with ChangeNotifier {
   final ApiService apiService;
+  LocalJourneyStore? _localStore;
 
   ActiveJourney? _activeJourney;
   bool _isNavigating = false;
@@ -916,6 +918,8 @@ class JourneyProvider with ChangeNotifier {
 
       _journeyHistory.removeWhere((j) => j.journeyId == _activeJourney!.journeyId);
       _journeyHistory.insert(0, _activeJourney!);
+      // P5: Persist locally for offline access
+      _localStore?.saveJourney(_activeJourney!);
 
       _isNavigating = false;
       _isDestinationReached = false;
@@ -927,6 +931,8 @@ class JourneyProvider with ChangeNotifier {
       if (_activeJourney != null) {
         _journeyHistory.removeWhere((j) => j.journeyId == _activeJourney!.journeyId);
         _journeyHistory.insert(0, _activeJourney!);
+      // P5: Persist locally for offline access
+      _localStore?.saveJourney(_activeJourney!);
       }
       _isNavigating = false;
       _isDestinationReached = false;
@@ -945,6 +951,8 @@ class JourneyProvider with ChangeNotifier {
       _activeJourney!.journeyStatus = 'completed';
       _journeyHistory.removeWhere((j) => j.journeyId == _activeJourney!.journeyId);
       _journeyHistory.insert(0, _activeJourney!);
+      // P5: Persist locally for offline access
+      _localStore?.saveJourney(_activeJourney!);
     }
     _isNavigating = false;
     _isDestinationReached = false;
@@ -966,6 +974,16 @@ class JourneyProvider with ChangeNotifier {
       if (list.isEmpty) {
         try {
           list = await apiService.getUserJourneys(userId);
+        } catch (_) {}
+      }
+
+      // P5: Supplement with locally-cached journeys if backend/Firebase returned nothing
+      if (list.isEmpty) {
+        try {
+          final localStore = LocalJourneyStore(userId: userId);
+          final localJourneys = await localStore.loadJourneys();
+          list.addAll(localJourneys);
+          debugPrint('[JourneyProvider] Loaded ${localJourneys.length} local journeys as fallback');
         } catch (_) {}
       }
 

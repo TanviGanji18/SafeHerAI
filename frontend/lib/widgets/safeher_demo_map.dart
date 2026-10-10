@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart' as fmap;
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
@@ -76,7 +76,7 @@ class _SafeHerDemoMapState extends State<SafeHerDemoMap> {
     if (oldWidget.userLocation == null && widget.userLocation != null) {
       _mapController.move(
         _toLatLng(widget.userLocation!.latitude, widget.userLocation!.longitude),
-        widget.isNavigating ? 16.0 : 14.5,
+        widget.isNavigating ? 16.5 : 15.0,
       );
       return;
     }
@@ -92,7 +92,7 @@ class _SafeHerDemoMapState extends State<SafeHerDemoMap> {
           oldLoc.longitude != newLoc.longitude) {
         _mapController.move(
           _toLatLng(newLoc.latitude, newLoc.longitude),
-          _mapController.camera.zoom.clamp(14.0, 18.0),
+          _mapController.camera.zoom.clamp(13.5, 18.5),
         );
       }
     }
@@ -343,6 +343,105 @@ class _SafeHerDemoMapState extends State<SafeHerDemoMap> {
     );
   }
 
+  /// Shows a bottom-sheet callout when a map marker is tapped.
+  void _showMarkerCallout(BuildContext context, {
+    required String name,
+    required String type,
+    required IconData icon,
+    required Color color,
+    String? extra,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.14),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color.withValues(alpha: 0.12),
+                      border: Border.all(color: color, width: 2),
+                    ),
+                    child: Icon(icon, color: color, size: 26),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            type,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: color,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (extra != null) ...[
+                const SizedBox(height: 12),
+                Text(extra, style: const TextStyle(fontSize: 13, color: Colors.black54)),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   List<fmap.Marker> _buildSafetyMarkers() {
     final markers = <fmap.Marker>[];
     final spots = widget.safeSpots;
@@ -355,11 +454,20 @@ class _SafeHerDemoMapState extends State<SafeHerDemoMap> {
             point: _toLatLng(police.latitude, police.longitude),
             width: 38,
             height: 38,
-            child: Tooltip(
-              message: police.name,
-              child: _safeSpotMarker(
-                color: Colors.blue.shade700,
+            child: GestureDetector(
+              onTap: () => _showMarkerCallout(
+                context,
+                name: police.name,
+                type: 'Police Station',
                 icon: Icons.local_police,
+                color: Colors.blue.shade700,
+              ),
+              child: Tooltip(
+                message: police.name,
+                child: _safeSpotMarker(
+                  color: Colors.blue.shade700,
+                  icon: Icons.local_police,
+                ),
               ),
             ),
           ),
@@ -374,11 +482,20 @@ class _SafeHerDemoMapState extends State<SafeHerDemoMap> {
             point: _toLatLng(hospital.latitude, hospital.longitude),
             width: 38,
             height: 38,
-            child: Tooltip(
-              message: hospital.name,
-              child: _safeSpotMarker(
-                color: Colors.red.shade700,
+            child: GestureDetector(
+              onTap: () => _showMarkerCallout(
+                context,
+                name: hospital.name,
+                type: 'Hospital',
                 icon: Icons.local_hospital,
+                color: Colors.red.shade700,
+              ),
+              child: Tooltip(
+                message: hospital.name,
+                child: _safeSpotMarker(
+                  color: Colors.red.shade700,
+                  icon: Icons.local_hospital,
+                ),
               ),
             ),
           ),
@@ -393,11 +510,20 @@ class _SafeHerDemoMapState extends State<SafeHerDemoMap> {
             point: _toLatLng(station.latitude, station.longitude),
             width: 38,
             height: 38,
-            child: Tooltip(
-              message: station.name,
-              child: _safeSpotMarker(
-                color: Colors.orange.shade700,
+            child: GestureDetector(
+              onTap: () => _showMarkerCallout(
+                context,
+                name: station.name,
+                type: 'Transit Station',
                 icon: Icons.directions_transit,
+                color: Colors.orange.shade700,
+              ),
+              child: Tooltip(
+                message: station.name,
+                child: _safeSpotMarker(
+                  color: Colors.orange.shade700,
+                  icon: Icons.directions_transit,
+                ),
               ),
             ),
           ),
@@ -412,11 +538,21 @@ class _SafeHerDemoMapState extends State<SafeHerDemoMap> {
             point: _toLatLng(blackspot.latitude, blackspot.longitude),
             width: 38,
             height: 38,
-            child: Tooltip(
-              message: blackspot.name,
-              child: _safeSpotMarker(
-                color: Colors.deepPurple.shade700,
+            child: GestureDetector(
+              onTap: () => _showMarkerCallout(
+                context,
+                name: blackspot.name,
+                type: 'Accident Blackspot',
                 icon: Icons.warning_amber_rounded,
+                color: Colors.deepPurple.shade700,
+                extra: 'This area has a history of accidents. Exercise caution.',
+              ),
+              child: Tooltip(
+                message: blackspot.name,
+                child: _safeSpotMarker(
+                  color: Colors.deepPurple.shade700,
+                  icon: Icons.warning_amber_rounded,
+                ),
               ),
             ),
           ),
@@ -584,7 +720,7 @@ class _SafeHerDemoMapState extends State<SafeHerDemoMap> {
           mapController: _mapController,
           options: fmap.MapOptions(
             initialCenter: centerTarget,
-            initialZoom: widget.isNavigating ? 16.0 : 13.0,
+            initialZoom: widget.isNavigating ? 16.5 : 14.0,
             minZoom: 5,
             maxZoom: 19,
             interactionOptions: const fmap.InteractionOptions(
