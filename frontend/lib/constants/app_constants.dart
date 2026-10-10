@@ -45,3 +45,4 @@ class AppColors {
   static const Color textSecondary = Color(0xFF64748B);
   static const Color border = Color(0xFFE2E8F0);
 }
+

@@ -878,8 +878,8 @@ void main() {
     });
   });
 
-  group('P2 Location Entry UI', () {
-    testWidgets('RoutePlanningScreen provides Pick on map buttons for origin and destination', (WidgetTester tester) async {
+  group('P2 Rapido-Style Location Entry and Theme System', () {
+    testWidgets('RoutePlanningScreen provides single Select on map action that adapts to active field', (WidgetTester tester) async {
       await tester.pumpWidget(
         MultiProvider(
           providers: [
@@ -898,8 +898,9 @@ void main() {
         ),
       );
 
-      // Verify Pick on map buttons exist
-      expect(find.text('Pick on map'), findsNWidgets(2));
+      // Verify single shared "Select on map" button exists and "Use my current location" exists
+      expect(find.text('Select on map'), findsOneWidget);
+      expect(find.text('Use my current location'), findsOneWidget);
     });
   });
 }

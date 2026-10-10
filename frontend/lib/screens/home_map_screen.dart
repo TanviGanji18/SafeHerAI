@@ -340,8 +340,8 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                             );
                           },
                           child: Container(
-                            width: 48,
-                            height: 48,
+                            width: 44,
+                            height: 44,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 1.5),

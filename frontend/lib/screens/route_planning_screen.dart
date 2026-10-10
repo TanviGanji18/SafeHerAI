@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart' as fmap;
+import 'package:latlong2/latlong.dart' as ll;
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../constants/app_constants.dart';
@@ -17,6 +19,10 @@ class RoutePlanningScreen extends StatefulWidget {
 class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
   late final TextEditingController _originController;
   late final TextEditingController _destinationController;
+  final FocusNode _originFocusNode = FocusNode();
+  final FocusNode _destFocusNode = FocusNode();
+  bool _isOriginActive = false;
+
   String _travelMode = 'driving';
   List<Map<String, dynamic>> _suggestions = [];
   bool _isSearching = false;
@@ -47,6 +53,17 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
     _originController.addListener(_onTextChanged);
     _destinationController.addListener(_onTextChanged);
 
+    _originFocusNode.addListener(() {
+      if (_originFocusNode.hasFocus && mounted) {
+        setState(() => _isOriginActive = true);
+      }
+    });
+    _destFocusNode.addListener(() {
+      if (_destFocusNode.hasFocus && mounted) {
+        setState(() => _isOriginActive = false);
+      }
+    });
+
     // Automatically obtain current GPS position and initiate live location tracking on screen open
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startLiveLocationTracking();
@@ -64,6 +81,8 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
     _positionSubscription?.cancel();
     _originController.removeListener(_onTextChanged);
     _destinationController.removeListener(_onTextChanged);
+    _originFocusNode.dispose();
+    _destFocusNode.dispose();
     _originController.dispose();
     _destinationController.dispose();
     super.dispose();
@@ -219,6 +238,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
       _lastResolvedPosition = position;
       _lastReverseGeocodeTime = DateTime.now();
 
+      if (!mounted) return;
       final routeProv = Provider.of<RouteProvider>(context, listen: false);
       final address = await routeProv.apiService.reverseGeocode(position.latitude, position.longitude);
 
@@ -256,11 +276,14 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
   Future<void> _openMapPicker({required bool forOrigin}) async {
     final routeProv = Provider.of<RouteProvider>(context, listen: false);
     // Default center: user location or Hyderabad center
-    double lat = 17.3850;
-    double lng = 78.4867;
+    double lat = AppConstants.hyderabadCenterLat;
+    double lng = AppConstants.hyderabadCenterLon;
     if (_selectedOriginCoords != null && forOrigin == false) {
       lat = (_selectedOriginCoords!['latitude'] as num?)?.toDouble() ?? lat;
       lng = (_selectedOriginCoords!['longitude'] as num?)?.toDouble() ?? lng;
+    } else if (forOrigin && _lastResolvedPosition != null) {
+      lat = _lastResolvedPosition!.latitude;
+      lng = _lastResolvedPosition!.longitude;
     }
 
     final picked = await Navigator.of(context).push<Map<String, dynamic>>(
@@ -268,7 +291,8 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
         builder: (_) => _MapPickerScreen(
           initialLat: lat,
           initialLng: lng,
-          title: forOrigin ? 'Pick Starting Location' : 'Pick Destination',
+          title: forOrigin ? 'Select Starting Location' : 'Select Destination',
+          forOrigin: forOrigin,
           apiService: routeProv.apiService,
         ),
       ),
@@ -283,6 +307,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
           _selectedOriginCoords = picked;
           _userManuallyEditedOrigin = true;
           _originSuggestions = [];
+          _isOriginActive = false;
         } else {
           _destinationController.text = picked['address'] ?? 'Selected location';
           _selectedDestCoords = picked;
@@ -401,17 +426,21 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Search Inputs Card
+              // Search Inputs Card (Rapido-Style Pickup & Destination Experience)
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                color: AppColors.surface,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Origin Input
+                      // Origin Input (From)
                       TextField(
                         controller: _originController,
+                        focusNode: _originFocusNode,
+                        onTap: () => setState(() => _isOriginActive = true),
                         onChanged: (text) {
                           if (_selectedOriginCoords != null &&
                               _originController.text != (_selectedOriginCoords!['address'] ?? '')) {
@@ -425,7 +454,6 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
                           hintText: 'Enter starting location',
                           prefixIcon: const Icon(Icons.my_location, color: Colors.cyan),
                           suffixIcon: _originController.text.isNotEmpty
-                              // Clear button takes priority -- always visible when the field has text
                               ? IconButton(
                                   icon: const Icon(Icons.clear, size: 20, color: Colors.grey),
                                   tooltip: 'Clear starting location',
@@ -437,7 +465,6 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
                                   },
                                 )
                               : _isLocatingOrigin
-                                  // Spinner when field is empty and GPS is resolving
                                   ? const SizedBox(
                                       width: 24,
                                       height: 24,
@@ -449,7 +476,6 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
                                         ),
                                       ),
                                     )
-                                  // GPS icon when field is empty and not locating
                                   : IconButton(
                                       icon: const Icon(Icons.gps_fixed, size: 20, color: Colors.cyan),
                                       tooltip: 'Use my current location',
@@ -482,30 +508,14 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
                           ),
                         ),
                       ),
-                      // "Pick on map" for origin
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: () => _openMapPicker(forOrigin: true),
-                          icon: const Icon(Icons.map_outlined, size: 15, color: AppColors.primaryLight),
-                          label: const Text(
-                            'Pick on map',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.primaryLight),
-                          ),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
 
                       // Origin Suggestions Dropdown
                       if (_originSuggestions.isNotEmpty)
                         Card(
                           elevation: 4,
-                          margin: const EdgeInsets.only(bottom: 6),
+                          margin: const EdgeInsets.only(bottom: 8),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          color: AppColors.surface,
                           child: Column(
                             children: _originSuggestions.map((s) {
                               return ListTile(
@@ -521,16 +531,23 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
                                     'address': s['description'] ?? '',
                                   };
                                   _userManuallyEditedOrigin = true;
-                                  setState(() => _originSuggestions = []);
+                                  setState(() {
+                                    _originSuggestions = [];
+                                    _isOriginActive = false;
+                                  });
                                 },
                               );
                             }).toList(),
                           ),
                         ),
 
-                      // Destination Input
+                      const SizedBox(height: 6),
+
+                      // Destination Input (To)
                       TextField(
                         controller: _destinationController,
+                        focusNode: _destFocusNode,
+                        onTap: () => setState(() => _isOriginActive = false),
                         onChanged: (text) {
                           if (_selectedDestCoords != null &&
                               text != (_selectedDestCoords!['address'] ?? '')) {
@@ -569,19 +586,98 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
                                   : null),
                         ),
                       ),
-                      // "Pick on map" for destination
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: () => _openMapPicker(forOrigin: false),
-                          icon: const Icon(Icons.map_outlined, size: 15, color: AppColors.accent),
-                          label: const Text(
-                            'Pick on map',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.accent),
+
+                      // Destination Suggestions Dropdown
+                      if (_suggestions.isNotEmpty)
+                        Card(
+                          elevation: 4,
+                          margin: const EdgeInsets.only(top: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          color: AppColors.surface,
+                          child: Column(
+                            children: _suggestions.map((s) {
+                              return ListTile(
+                                dense: true,
+                                leading: const Icon(Icons.location_pin, color: AppColors.accent, size: 20),
+                                title: Text(s['description'] ?? '', style: const TextStyle(fontSize: 13)),
+                                subtitle: Text(s['category'] ?? 'Hyderabad Location', style: const TextStyle(fontSize: 11)),
+                                onTap: () {
+                                  _destinationController.text = s['description'] ?? '';
+                                  _selectedDestCoords = {
+                                    'latitude': s['latitude'],
+                                    'longitude': s['longitude'],
+                                    'address': s['description'] ?? '',
+                                  };
+                                  setState(() => _suggestions = []);
+                                },
+                              );
+                            }).toList(),
                           ),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                            visualDensity: VisualDensity.compact,
+                        ),
+
+                      const SizedBox(height: 12),
+
+                      // Single Shared Rapido-Style "Select on map" Action
+                      InkWell(
+                        onTap: () => _openMapPicker(forOrigin: _isOriginActive),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                          decoration: BoxDecoration(
+                            color: (_isOriginActive ? Colors.teal : AppColors.accent).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: (_isOriginActive ? Colors.teal : AppColors.accent).withValues(alpha: 0.35),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.pin_drop_rounded,
+                                size: 22,
+                                color: _isOriginActive ? Colors.teal : AppColors.accent,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Text(
+                                          'Select on map',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: (_isOriginActive ? Colors.teal : AppColors.accent).withValues(alpha: 0.16),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            _isOriginActive ? 'For Starting Location (From)' : 'For Destination (To)',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: _isOriginActive ? Colors.teal : AppColors.accent,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _isOriginActive
+                                          ? 'Pinpoint starting location on live street map'
+                                          : 'Pinpoint destination on live street map',
+                                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary),
+                            ],
                           ),
                         ),
                       ),
@@ -713,18 +809,21 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen> {
   }
 }
 
-/// Full-screen map picker allowing the user to tap a location.
-/// Reverse-geocodes the tapped point and returns { latitude, longitude, address }.
+/// Full-screen real street map picker allowing the user to pan/zoom and select a location.
+/// Reuses flutter_map and OpenStreetMap / CartoDB tiles with live reverse geocoding.
 class _MapPickerScreen extends StatefulWidget {
   final double initialLat;
   final double initialLng;
   final String title;
+  final bool forOrigin;
   final dynamic apiService;
 
   const _MapPickerScreen({
+    super.key,
     required this.initialLat,
     required this.initialLng,
     required this.title,
+    required this.forOrigin,
     required this.apiService,
   });
 
@@ -733,25 +832,44 @@ class _MapPickerScreen extends StatefulWidget {
 }
 
 class _MapPickerScreenState extends State<_MapPickerScreen> {
+  final fmap.MapController _mapController = fmap.MapController();
   late double _pickedLat;
   late double _pickedLng;
-  String _pickedAddress = 'Tap the map to select a location';
+  String _pickedAddress = 'Locating street address...';
   bool _isResolving = false;
+  Timer? _debounceTimer;
 
   @override
   void initState() {
     super.initState();
     _pickedLat = widget.initialLat;
     _pickedLng = widget.initialLng;
+    _resolveAddress(_pickedLat, _pickedLng);
   }
 
-  Future<void> _onMapTap(double lat, double lng) async {
-    setState(() {
-      _pickedLat = lat;
-      _pickedLng = lng;
-      _isResolving = true;
-      _pickedAddress = 'Resolving address…';
-    });
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  void _onPositionChanged(fmap.MapCamera camera, bool hasGesture) {
+    _pickedLat = camera.center.latitude;
+    _pickedLng = camera.center.longitude;
+    if (hasGesture) {
+      _debounceTimer?.cancel();
+      if (!_isResolving) {
+        setState(() => _isResolving = true);
+      }
+      _debounceTimer = Timer(const Duration(milliseconds: 350), () {
+        _resolveAddress(_pickedLat, _pickedLng);
+      });
+    }
+  }
+
+  Future<void> _resolveAddress(double lat, double lng) async {
+    setState(() => _isResolving = true);
     try {
       final address = await widget.apiService.reverseGeocode(lat, lng);
       if (mounted) {
@@ -770,177 +888,282 @@ class _MapPickerScreenState extends State<_MapPickerScreen> {
     }
   }
 
+  Future<void> _jumpToGps() async {
+    try {
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 5),
+        );
+      } catch (_) {
+        pos = await Geolocator.getLastKnownPosition();
+      }
+      if (pos != null && mounted) {
+        _mapController.move(ll.LatLng(pos.latitude, pos.longitude), 16.0);
+        _pickedLat = pos.latitude;
+        _pickedLng = pos.longitude;
+        _resolveAddress(_pickedLat, _pickedLng);
+      }
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Import flutter_map for the picker
-    // flutter_map is already a dependency
+    final accentColor = widget.forOrigin ? Colors.teal : AppColors.accent;
+    final modeLabel = widget.forOrigin ? 'PICKUP LOCATION' : 'DESTINATION';
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        actions: [
-          TextButton(
-            onPressed: _isResolving
-                ? null
-                : () {
-                    Navigator.of(context).pop({
-                      'latitude': _pickedLat,
-                      'longitude': _pickedLng,
-                      'address': _pickedAddress,
-                    });
-                  },
-            child: const Text(
-              'Confirm',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-          ),
-        ],
       ),
       body: Stack(
         children: [
-          // Import from flutter_map; both are already imported via safeher_demo_map indirectly,
-          // but we need a direct import here. Use the map via GestureDetector on a Container for now.
-          _buildInteractiveMap(),
-          // Bottom overlay showing current picked address
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 12,
-                    offset: const Offset(0, -3),
-                  ),
+          // 1. Live Street Map — OpenStreetMap standard light tiles (same as main map)
+          fmap.FlutterMap(
+            mapController: _mapController,
+            options: fmap.MapOptions(
+              initialCenter: ll.LatLng(_pickedLat, _pickedLng),
+              initialZoom: 15.5,
+              minZoom: 6.0,
+              maxZoom: 19.0,
+              interactionOptions: const fmap.InteractionOptions(
+                flags: fmap.InteractiveFlag.all,
+              ),
+              onPositionChanged: _onPositionChanged,
+              onTap: (tapPos, point) {
+                _mapController.move(point, _mapController.camera.zoom);
+                _pickedLat = point.latitude;
+                _pickedLng = point.longitude;
+                _resolveAddress(_pickedLat, _pickedLng);
+              },
+            ),
+            children: [
+              fmap.TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.safeher_ai',
+              ),
+              const fmap.RichAttributionWidget(
+                attributions: [
+                  fmap.TextSourceAttribution('OpenStreetMap contributors'),
                 ],
               ),
+            ],
+          ),
+
+          // 2. Center Pin (Rapido/Uber style fixed pin pointing to exact map center)
+          Center(
+            child: Transform.translate(
+              offset: const Offset(0, -22),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.location_pin, color: AppColors.accent, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _isResolving
-                            ? const SizedBox(
-                                height: 16,
-                                child: LinearProgressIndicator(),
-                              )
-                            : Text(
-                                _pickedAddress,
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: accentColor,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      modeLabel,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Tap anywhere on the map to move the pin',
-                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  const SizedBox(height: 2),
+                  Icon(
+                    Icons.location_pin,
+                    color: accentColor,
+                    size: 44,
                   ),
                 ],
               ),
             ),
           ),
-          // Center cross-hair pin
-          const Center(
-            child: Icon(Icons.location_pin, color: AppColors.accent, size: 48),
+
+          // Center target dot
+          Center(
+            child: Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: accentColor,
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black54,
+                    blurRadius: 3,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 3. Floating Zoom and GPS Controls
+          Positioned(
+            right: 14,
+            bottom: 180,
+            child: Column(
+              children: [
+                _mapButton(
+                  icon: Icons.add,
+                  onPressed: () {
+                    final z = _mapController.camera.zoom;
+                    _mapController.move(_mapController.camera.center, (z + 1).clamp(6.0, 19.0));
+                  },
+                ),
+                const SizedBox(height: 8),
+                _mapButton(
+                  icon: Icons.remove,
+                  onPressed: () {
+                    final z = _mapController.camera.zoom;
+                    _mapController.move(_mapController.camera.center, (z - 1).clamp(6.0, 19.0));
+                  },
+                ),
+                const SizedBox(height: 8),
+                _mapButton(
+                  icon: Icons.my_location,
+                  iconColor: accentColor,
+                  onPressed: _jumpToGps,
+                ),
+              ],
+            ),
+          ),
+
+          // 4. Bottom Confirmation Card
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 16,
+            child: Card(
+              elevation: 8,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              color: Colors.white,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: accentColor.withValues(alpha: 0.15),
+                          ),
+                          child: Icon(Icons.location_on, color: accentColor, size: 20),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    modeLabel,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: accentColor,
+                                    ),
+                                  ),
+                                  if (_isResolving) ...[
+                                    const SizedBox(width: 8),
+                                    const SizedBox(
+                                      width: 12,
+                                      height: 12,
+                                      child: CircularProgressIndicator(strokeWidth: 1.5),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _isResolving ? 'Resolving street address...' : _pickedAddress,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: AppColors.textPrimary,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                '${_pickedLat.toStringAsFixed(5)}°N, ${_pickedLng.toStringAsFixed(5)}°E',
+                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop({
+                          'latitude': _pickedLat,
+                          'longitude': _pickedLng,
+                          'address': _pickedAddress,
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: widget.forOrigin ? AppColors.primary : AppColors.accent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text(
+                        'Confirm ${widget.forOrigin ? "Starting" : "Destination"} Location',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildInteractiveMap() {
-    // Use flutter_map with a tap handler
-    // flutter_map is already a dependency; import at top of this file via safeher_demo_map.dart
-    // We use a simple GestureDetector on a LayoutBuilder to compute geo coordinates from tap offset
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return GestureDetector(
-          onTapDown: (details) {
-            // Convert screen offset to lat/lng using a simple linear projection
-            // Viewport spans roughly ±0.04 degrees around center at zoom ~14
-            final frac = 0.040;
-            final nx = details.localPosition.dx / constraints.maxWidth;
-            final ny = details.localPosition.dy / constraints.maxHeight;
-            final lat = _pickedLat + frac - (ny * frac * 2);
-            final lng = _pickedLng - frac + (nx * frac * 2);
-            _onMapTap(lat, lng);
-          },
-          child: Container(
-            color: const Color(0xFFE8EFD8), // OSM-like light background
-            child: CustomPaint(
-              size: Size(constraints.maxWidth, constraints.maxHeight),
-              painter: _MapGridPainter(
-                centerLat: _pickedLat,
-                centerLng: _pickedLng,
-              ),
-            ),
+  Widget _mapButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+    Color? iconColor,
+  }) {
+    return Material(
+      color: Colors.white,
+      elevation: 4,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onPressed,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(
+            icon,
+            size: 20,
+            color: iconColor ?? AppColors.textPrimary,
           ),
-        );
-      },
+        ),
+      ),
     );
   }
-}
-
-/// Simple grid painter that draws a map-like grid background with coordinate labels.
-class _MapGridPainter extends CustomPainter {
-  final double centerLat;
-  final double centerLng;
-
-  _MapGridPainter({required this.centerLat, required this.centerLng});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = const Color(0xFFCDD8B8)
-      ..strokeWidth = 1.0;
-
-    const gridLines = 8;
-    for (int i = 0; i <= gridLines; i++) {
-      final x = size.width * i / gridLines;
-      final y = size.height * i / gridLines;
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
-    textPainter.text = TextSpan(
-      text: '${centerLat.toStringAsFixed(4)}°N  ${centerLng.toStringAsFixed(4)}°E',
-      style: const TextStyle(color: Color(0xFF666655), fontSize: 12),
-    );
-    textPainter.layout();
-    textPainter.paint(canvas, Offset(size.width / 2 - textPainter.width / 2, 16));
-
-    // Road-like stripes
-    final roadPaint = Paint()
-      ..color = const Color(0xFFDDD8CC)
-      ..strokeWidth = 18.0
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawLine(
-      Offset(0, size.height * 0.4),
-      Offset(size.width, size.height * 0.4),
-      roadPaint,
-    );
-    canvas.drawLine(
-      Offset(size.width * 0.3, 0),
-      Offset(size.width * 0.6, size.height),
-      roadPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_MapGridPainter old) =>
-      old.centerLat != centerLat || old.centerLng != centerLng;
 }

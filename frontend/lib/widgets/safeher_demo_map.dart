@@ -1,4 +1,4 @@
-﻿import 'dart:math' as math;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart' as fmap;
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
@@ -715,7 +715,7 @@ class _SafeHerDemoMapState extends State<SafeHerDemoMap> {
 
     return Stack(
       children: [
-        // REAL OPENSTREETMAP / LEAFLET-STYLE MAP
+        // REAL OPENSTREETMAP STANDARD LIGHT TILES
         fmap.FlutterMap(
           mapController: _mapController,
           options: fmap.MapOptions(
@@ -764,11 +764,11 @@ class _SafeHerDemoMapState extends State<SafeHerDemoMap> {
               vertical: 7,
             ),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.94),
+              color: Colors.white.withValues(alpha: 0.94),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
+                  color: Colors.black.withValues(alpha: 0.12),
                   blurRadius: 8,
                   offset: const Offset(0, 3),
                 ),

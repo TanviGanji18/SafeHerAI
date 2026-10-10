@@ -38,9 +38,12 @@ class SafeHerAIApp extends StatelessWidget {
             seedColor: AppColors.primary,
             primary: AppColors.primary,
             secondary: AppColors.accent,
-            background: AppColors.background,
+            surface: AppColors.surface,
           ),
+          scaffoldBackgroundColor: AppColors.background,
           appBarTheme: const AppBarTheme(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
             elevation: 0,
             centerTitle: true,
           ),

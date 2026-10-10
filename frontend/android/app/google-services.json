@@ -12,7 +12,20 @@
           "package_name": "com.example.safeher_ai"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "5961099078-b0m49fr2eohhlhsd8pvbuhkva9vcvj3q.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.safeher_ai",
+            "certificate_hash": "942b4a7cd08bfce70fac338bd089014994d9cc50"
+          }
+        },
+        {
+          "client_id": "5961099078-5ri3mk87v57b4m09mnikfp1jpca1b864.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDbskBz1sfXTWJYYlsdsOWt8zFPkjbv6l0"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "5961099078-5ri3mk87v57b4m09mnikfp1jpca1b864.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
