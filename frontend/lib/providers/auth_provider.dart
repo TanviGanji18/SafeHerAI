@@ -142,10 +142,25 @@ class AuthProvider with ChangeNotifier {
       final res = await apiService.authenticateFirebase(idToken);
 
       // 6. Store returned UserProfile/session preserving fullName and emergency phone
-      _user = res.user.copyWith(
-        fullName: fullName.trim().isNotEmpty ? fullName.trim() : null,
-        phone: (phone != null && phone.trim().isNotEmpty) ? phone.trim() : null,
-      );
+_user = res.user.copyWith(
+  fullName: fullName.trim().isNotEmpty ? fullName.trim() : null,
+  phone: (phone != null && phone.trim().isNotEmpty) ? phone.trim() : null,
+);
+
+// 7. Persist the personal emergency phone in the FastAPI backend
+if (!isGuest && phone != null && phone.trim().isNotEmpty) {
+  try {
+    final updatedProfile = await apiService.updateProfile(
+      userId: _user!.id,
+      fullName: fullName.trim(),
+      phone: phone.trim(),
+    );
+
+    _user = updatedProfile;
+  } catch (e) {
+    debugPrint('[AuthProvider] Failed to persist registration profile: $e');
+  }
+}
       _isLoading = false;
       notifyListeners();
       return true;

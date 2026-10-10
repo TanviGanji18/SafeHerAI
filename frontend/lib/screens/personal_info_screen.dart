@@ -224,9 +224,15 @@ class _PersonalInfoScreenState extends State<PersonalInfoScreen> {
                                 const Icon(Icons.phone_outlined, size: 18, color: AppColors.textSecondary),
                                 const SizedBox(width: 8),
                                 Text(
-                                  user?.phone != null && user!.phone!.isNotEmpty ? user.phone! : '+919490616555',
-                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                                ),
+  user?.phone != null && user!.phone!.isNotEmpty
+      ? user.phone!
+      : 'Not specified',
+  style: const TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w600,
+    color: AppColors.textPrimary,
+  ),
+),
                               ],
                             ),
                           ),

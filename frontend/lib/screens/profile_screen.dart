@@ -58,7 +58,6 @@ class ProfileScreen extends StatelessWidget {
 
     final displayName = isGuest ? 'Guest Traveler' : (user?.fullName.isNotEmpty == true ? user!.fullName : 'SafeHer Traveler');
     final displayEmail = isGuest ? 'guest@safeher.ai' : (user?.email.isNotEmpty == true ? user!.email : '');
-    final emergencyPhone = user?.phone != null && user!.phone!.isNotEmpty ? user.phone! : '+919490616555';
 
     final initials = displayName.trim().isNotEmpty
         ? displayName.trim().split(' ').map((n) => n.isNotEmpty ? n[0] : '').take(2).join('').toUpperCase()
@@ -143,18 +142,6 @@ class ProfileScreen extends StatelessWidget {
                             displayEmail,
                             style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                             overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              const Icon(Icons.phone_outlined, size: 13, color: AppColors.safeGreen),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Emergency Phone: $emergencyPhone',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.safeGreen),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
                           ),
                         ],
                       ),

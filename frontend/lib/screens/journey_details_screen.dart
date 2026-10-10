@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../constants/app_constants.dart';
 import '../models/journey_model.dart';
@@ -14,12 +14,10 @@ class JourneyDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('d MMM yyyy');
     final timeFormat = DateFormat('h:mm a');
-    final startFormatted = '${dateFormat.format(journey.startTime)} • ${timeFormat.format(journey.startTime)}';
+    final startFormatted = '${dateFormat.format(journey.startTime)} â€¢ ${timeFormat.format(journey.startTime)}';
     final endFormatted = journey.endTime != null ? timeFormat.format(journey.endTime!) : 'Completed';
 
     final route = journey.selectedRoute;
-    final score = journey.safetyScore;
-
     // 7-Factor safety breakdown: reuse existing genuine route contributions
     final double policePts = route.contributions.policePts;
     final double medicalPts = route.contributions.medicalPts;
@@ -70,7 +68,7 @@ class JourneyDetailsScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${journey.originAddress} → ${journey.destinationAddress}',
+                                '${journey.originAddress} â†’ ${journey.destinationAddress}',
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -237,7 +235,7 @@ class JourneyDetailsScreen extends StatelessWidget {
               awardedPts: policePts,
               maxPts: 25.0,
               normalizedValue: policePts / 25.0,
-              description: 'Avg distance: ${route.rawFeatures.avgPoliceDistKm.toStringAsFixed(2)} km • ${route.rawFeatures.policeWithin1kmCount} stations nearby',
+              description: 'Avg distance: ${route.rawFeatures.avgPoliceDistKm.toStringAsFixed(2)} km â€¢ ${route.rawFeatures.policeWithin1kmCount} stations nearby',
               icon: Icons.local_police_outlined,
             ),
 

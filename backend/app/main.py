@@ -14,6 +14,7 @@ from fastapi.exceptions import RequestValidationError
 
 from .api.routes import router as api_router
 from .services.route_service import RouteSafetyService
+from .core.config import ALLOWED_ORIGINS
 
 # Create FastAPI application
 app = FastAPI(
@@ -32,24 +33,9 @@ app = FastAPI(
 # ==============================================================================
 # CORS Configuration
 # ==============================================================================
-# Development origins permitted to communicate with this backend.
-# In production, this should be restricted strictly to verified mobile/web domains.
-DEVELOPMENT_ORIGINS = [
-    "http://localhost",
-    "http://localhost:3000",
-    "http://localhost:8000",
-    "http://localhost:8080",
-    "http://127.0.0.1",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:8000",
-    "http://127.0.0.1:8080",
-    "http://10.0.2.2",         # Android Studio emulator host loopback
-    "http://10.0.2.2:8000",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=DEVELOPMENT_ORIGINS,
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],

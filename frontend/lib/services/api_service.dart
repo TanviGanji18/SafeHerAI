@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../constants/app_constants.dart';
@@ -6,10 +7,12 @@ import '../models/amenity_model.dart';
 import '../models/sos_model.dart';
 import '../models/user_model.dart';
 import '../models/journey_model.dart';
+import '../models/navigation_model.dart';
 
 class ApiService {
   String baseUrl;
   String? authToken;
+  final Map<String, String> _reverseGeocodeCache = {};
 
   ApiService({this.baseUrl = AppConstants.defaultApiUrl});
 
@@ -28,24 +31,84 @@ class ApiService {
     String travelMode = 'driving',
     bool alternatives = true,
   }) async {
-    final url = Uri.parse('$baseUrl/api/v1/routes/plan');
+    final payload = jsonEncode({
+      'origin': origin,
+      'destination': destination,
+      'travel_mode': travelMode,
+      'alternatives': alternatives,
+    });
+
+    try {
+      final url = Uri.parse('$baseUrl/api/v1/routes/plan');
+      final response = await http
+          .post(url, headers: _headers(), body: payload)
+          .timeout(const Duration(seconds: 18));
+
+      if (response.statusCode == 200) {
+        return RoutePlanResult.fromJson(jsonDecode(response.body));
+      } else {
+        throw Exception('Route planning failed: ${response.body}');
+      }
+    } on TimeoutException {
+      // If primary IP timed out on emulator, attempt 10.0.2.2 fallback host
+      if (baseUrl != 'http://10.0.2.2:8000') {
+        try {
+          final fallbackUrl = Uri.parse('http://10.0.2.2:8000/api/v1/routes/plan');
+          final response = await http
+              .post(fallbackUrl, headers: _headers(), body: payload)
+              .timeout(const Duration(seconds: 12));
+          if (response.statusCode == 200) {
+            baseUrl = 'http://10.0.2.2:8000';
+            return RoutePlanResult.fromJson(jsonDecode(response.body));
+          }
+        } catch (_) {}
+      }
+      throw Exception('Route calculation timed out. Please check your network connection and retry.');
+    } catch (e) {
+      // If host unreachable (e.g. SocketException), try 10.0.2.2 fallback host
+      if (baseUrl != 'http://10.0.2.2:8000') {
+        try {
+          final fallbackUrl = Uri.parse('http://10.0.2.2:8000/api/v1/routes/plan');
+          final response = await http
+              .post(fallbackUrl, headers: _headers(), body: payload)
+              .timeout(const Duration(seconds: 12));
+          if (response.statusCode == 200) {
+            baseUrl = 'http://10.0.2.2:8000';
+            return RoutePlanResult.fromJson(jsonDecode(response.body));
+          }
+        } catch (_) {}
+      }
+      rethrow;
+    }
+  }
+
+  // 1b. Real-Time Turn-By-Turn Navigation Route & Maneuvers
+  Future<NavigationRoute> getNavigationRoute({
+    required double originLat,
+    required double originLon,
+    required double destLat,
+    required double destLon,
+    String travelMode = 'driving',
+  }) async {
+    final url = Uri.parse('$baseUrl/api/v1/navigation/route');
     final response = await http
         .post(
           url,
           headers: _headers(),
           body: jsonEncode({
-            'origin': origin,
-            'destination': destination,
+            'origin_lat': originLat,
+            'origin_lon': originLon,
+            'dest_lat': destLat,
+            'dest_lon': destLon,
             'travel_mode': travelMode,
-            'alternatives': alternatives,
           }),
         )
-        .timeout(const Duration(seconds: 15));
+        .timeout(const Duration(seconds: 12));
 
     if (response.statusCode == 200) {
-      return RoutePlanResult.fromJson(jsonDecode(response.body));
+      return NavigationRoute.fromJson(jsonDecode(response.body));
     } else {
-      throw Exception('Route planning failed: ${response.body}');
+      throw Exception('Navigation routing failed: ${response.body}');
     }
   }
 
@@ -59,6 +122,48 @@ class ApiService {
       return data.map((e) => Map<String, dynamic>.from(e)).toList();
     }
     return [];
+  }
+
+  // 2b. Reverse Geocode Coordinates to Hyderabad Location Name
+  Future<String> reverseGeocode(double lat, double lon) async {
+    final cacheKey = '${lat.toStringAsFixed(4)},${lon.toStringAsFixed(4)}';
+    if (_reverseGeocodeCache.containsKey(cacheKey)) {
+      return _reverseGeocodeCache[cacheKey]!;
+    }
+
+    try {
+      final url = Uri.parse('$baseUrl/api/v1/places/reverse-geocode?lat=$lat&lon=$lon');
+      final response = await http.get(url, headers: _headers()).timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final addr = data['address'] as String?;
+        if (addr != null && addr.isNotEmpty) {
+          _reverseGeocodeCache[cacheKey] = addr;
+          return addr;
+        }
+      }
+    } catch (_) {
+      // If primary host fails, try emulator host
+      if (baseUrl != 'http://10.0.2.2:8000') {
+        try {
+          final fallbackUrl = Uri.parse('http://10.0.2.2:8000/api/v1/places/reverse-geocode?lat=$lat&lon=$lon');
+          final response = await http.get(fallbackUrl, headers: _headers()).timeout(const Duration(seconds: 3));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            final addr = data['address'] as String?;
+            if (addr != null && addr.isNotEmpty) {
+              _reverseGeocodeCache[cacheKey] = addr;
+              baseUrl = 'http://10.0.2.2:8000';
+              return addr;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    final fallback = '${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}';
+    _reverseGeocodeCache[cacheKey] = fallback;
+    return fallback;
   }
 
   // 3. Nearby Safe Spots (Police, Hospitals, Transit, Blackspots)

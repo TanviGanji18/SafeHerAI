@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../constants/app_constants.dart';
+import '../models/route_model.dart';
 import '../providers/route_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/journey_provider.dart';
@@ -26,6 +30,8 @@ class HomeMapScreen extends StatefulWidget {
 
 class _HomeMapScreenState extends State<HomeMapScreen> {
   GoogleMapController? _mapController;
+  CoordinatePoint? _currentUserLocation;
+  StreamSubscription<Position>? _positionSubscription;
 
   static const CameraPosition _initialCameraPosition = CameraPosition(
     target: LatLng(AppConstants.hyderabadCenterLat, AppConstants.hyderabadCenterLon),
@@ -38,7 +44,81 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final routeProv = Provider.of<RouteProvider>(context, listen: false);
       routeProv.fetchNearbyAmenities(AppConstants.hyderabadCenterLat, AppConstants.hyderabadCenterLon);
+      _initLiveLocationTracking();
     });
+  }
+
+  @override
+  void dispose() {
+    _positionSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initLiveLocationTracking() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      try {
+        Position? pos;
+        try {
+          pos = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high,
+            timeLimit: const Duration(seconds: 8),
+          );
+        } catch (_) {
+          pos = await Geolocator.getLastKnownPosition();
+        }
+        if (pos != null && mounted) {
+          final fix = pos;
+          setState(() {
+            _currentUserLocation = CoordinatePoint(
+              latitude: fix.latitude,
+              longitude: fix.longitude,
+            );
+          });
+        }
+      } catch (_) {}
+
+      await _positionSubscription?.cancel();
+
+      LocationSettings locationSettings;
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        locationSettings = AndroidSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 0,
+          intervalDuration: const Duration(milliseconds: 1000),
+        );
+      } else {
+        locationSettings = const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 0,
+        );
+      }
+
+      _positionSubscription = Geolocator.getPositionStream(
+        locationSettings: locationSettings,
+      ).listen((Position pos) {
+        if (mounted) {
+          setState(() {
+            _currentUserLocation = CoordinatePoint(
+              latitude: pos.latitude,
+              longitude: pos.longitude,
+            );
+          });
+        }
+      });
+    } catch (e) {
+      debugPrint('[HomeMap] Live location error: $e');
+    }
   }
 
   Set<Polyline> _buildPolylines(RouteProvider routeProv) {
@@ -182,7 +262,10 @@ class _HomeMapScreenState extends State<HomeMapScreen> {
                   onMapCreated: (controller) => _mapController = controller,
                 )
               : SafeHerDemoMap(
-                  initialCenter: const LatLng(AppConstants.hyderabadCenterLat, AppConstants.hyderabadCenterLon),
+                  initialCenter: _currentUserLocation != null
+                      ? LatLng(_currentUserLocation!.latitude, _currentUserLocation!.longitude)
+                      : const LatLng(AppConstants.hyderabadCenterLat, AppConstants.hyderabadCenterLon),
+                  userLocation: _currentUserLocation,
                   polylines: _buildPolylines(routeProv),
                   markers: _buildMarkers(routeProv),
                   activePolylinePoints: selected?.polylineCoords,

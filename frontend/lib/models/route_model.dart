@@ -1,3 +1,5 @@
+import 'package:safeher_ai/models/navigation_model.dart';
+
 class CoordinatePoint {
   final double latitude;
   final double longitude;
@@ -38,13 +40,13 @@ class ComponentScores {
 
   factory ComponentScores.fromJson(Map<String, dynamic> json) {
     return ComponentScores(
-      sPolice: (json['S_police'] as num).toDouble(),
-      sMedical: (json['S_medical'] as num).toDouble(),
-      sTransit: (json['S_transit'] as num).toDouble(),
-      sArterial: (json['S_arterial'] as num).toDouble(),
-      pCrime: (json['P_crime'] as num).toDouble(),
-      pBlackspot: (json['P_blackspot'] as num).toDouble(),
-      pExposure: (json['P_exposure'] as num).toDouble(),
+      sPolice: (json['S_police'] as num?)?.toDouble() ?? 75.0,
+      sMedical: (json['S_medical'] as num?)?.toDouble() ?? 75.0,
+      sTransit: (json['S_transit'] as num?)?.toDouble() ?? 75.0,
+      sArterial: (json['S_arterial'] as num?)?.toDouble() ?? 75.0,
+      pCrime: (json['P_crime'] as num?)?.toDouble() ?? 75.0,
+      pBlackspot: (json['P_blackspot'] as num?)?.toDouble() ?? 75.0,
+      pExposure: (json['P_exposure'] as num?)?.toDouble() ?? 75.0,
     );
   }
 }
@@ -70,13 +72,13 @@ class ComponentContributions {
 
   factory ComponentContributions.fromJson(Map<String, dynamic> json) {
     return ComponentContributions(
-      policePts: (json['police_pts'] as num).toDouble(),
-      medicalPts: (json['medical_pts'] as num).toDouble(),
-      transitPts: (json['transit_pts'] as num).toDouble(),
-      arterialPts: (json['arterial_pts'] as num).toDouble(),
-      crimeCompliancePts: (json['crime_compliance_pts'] as num).toDouble(),
-      blackspotCompliancePts: (json['blackspot_compliance_pts'] as num).toDouble(),
-      exposureCompliancePts: (json['exposure_compliance_pts'] as num).toDouble(),
+      policePts: (json['police_pts'] as num?)?.toDouble() ?? 0.0,
+      medicalPts: (json['medical_pts'] as num?)?.toDouble() ?? 0.0,
+      transitPts: (json['transit_pts'] as num?)?.toDouble() ?? 0.0,
+      arterialPts: (json['arterial_pts'] as num?)?.toDouble() ?? 0.0,
+      crimeCompliancePts: (json['crime_compliance_pts'] as num?)?.toDouble() ?? 0.0,
+      blackspotCompliancePts: (json['blackspot_compliance_pts'] as num?)?.toDouble() ?? 0.0,
+      exposureCompliancePts: (json['exposure_compliance_pts'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }
@@ -127,6 +129,7 @@ class EnrichedRoute {
   final ComponentScores components;
   final ComponentContributions contributions;
   final RawFeatures rawFeatures;
+  final List<NavigationStep> steps;
 
   EnrichedRoute({
     required this.routeId,
@@ -142,6 +145,7 @@ class EnrichedRoute {
     required this.components,
     required this.contributions,
     required this.rawFeatures,
+    this.steps = const [],
   });
 
   factory EnrichedRoute.fromJson(Map<String, dynamic> json) {
@@ -162,6 +166,10 @@ class EnrichedRoute {
       components: ComponentScores.fromJson(json['components']),
       contributions: ComponentContributions.fromJson(json['contributions']),
       rawFeatures: RawFeatures.fromJson(json['raw_features']),
+      steps: (json['steps'] as List<dynamic>?)
+              ?.map((s) => NavigationStep.fromJson(s as Map<String, dynamic>))
+              .toList() ??
+          const [],
     );
   }
 }

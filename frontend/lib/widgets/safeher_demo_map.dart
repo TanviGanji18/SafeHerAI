@@ -1,19 +1,20 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart' as fmap;
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
+import 'package:latlong2/latlong.dart' as ll;
+
 import '../constants/app_constants.dart';
 import '../models/route_model.dart';
 import '../models/amenity_model.dart';
 
-/// A polished, interactive vector map canvas used in development & demo mode
-/// when Google Maps API billing / key is not yet configured.
-///
-/// It visually projects actual coordinates, polylines, and safety markers
-/// without instantiating the native Android Google Play Services MapView,
-/// preventing the `IllegalStateException: API key not found` crash.
+/// Interactive map used by SafeHer AI.
+/// Uses OpenStreetMap tiles through flutter_map.
+/// Supports turn-by-turn navigation arrow/puck, camera follow, and polyline progress.
 class SafeHerDemoMap extends StatefulWidget {
-  final LatLng initialCenter;
-  final Set<Polyline> polylines;
-  final Set<Marker> markers;
+  final gmaps.LatLng initialCenter;
+  final Set<gmaps.Polyline> polylines;
+  final Set<gmaps.Marker> markers;
   final List<CoordinatePoint>? activePolylinePoints;
   final CoordinatePoint? userLocation;
   final CoordinatePoint? destinationLocation;
@@ -24,9 +25,20 @@ class SafeHerDemoMap extends StatefulWidget {
   final bool showBlackspots;
   final String? corridorTitle;
 
+  // Turn-by-Turn Navigation Enhancements
+  final double? userBearing;
+  final int? completedPolylineIndex;
+  final bool isNavigating;
+  final bool isCameraFollowing;
+  final VoidCallback? onRecenter;
+  final VoidCallback? onPanStart;
+
   const SafeHerDemoMap({
     Key? key,
-    this.initialCenter = const LatLng(AppConstants.hyderabadCenterLat, AppConstants.hyderabadCenterLon),
+    this.initialCenter = const gmaps.LatLng(
+      AppConstants.hyderabadCenterLat,
+      AppConstants.hyderabadCenterLon,
+    ),
     this.polylines = const {},
     this.markers = const {},
     this.activePolylinePoints,
@@ -38,6 +50,12 @@ class SafeHerDemoMap extends StatefulWidget {
     this.showTransit = true,
     this.showBlackspots = true,
     this.corridorTitle,
+    this.userBearing,
+    this.completedPolylineIndex,
+    this.isNavigating = false,
+    this.isCameraFollowing = true,
+    this.onRecenter,
+    this.onPanStart,
   }) : super(key: key);
 
   @override
@@ -45,396 +63,658 @@ class SafeHerDemoMap extends StatefulWidget {
 }
 
 class _SafeHerDemoMapState extends State<SafeHerDemoMap> {
-  final TransformationController _transformController = TransformationController();
+  final fmap.MapController _mapController = fmap.MapController();
 
-  void _resetZoom() {
-    _transformController.value = Matrix4.identity();
+  ll.LatLng _toLatLng(double latitude, double longitude) {
+    return ll.LatLng(latitude, longitude);
+  }
+
+  @override
+  void didUpdateWidget(SafeHerDemoMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 1. Initial GPS position lock: center map on user when location arrives
+    if (oldWidget.userLocation == null && widget.userLocation != null) {
+      _mapController.move(
+        _toLatLng(widget.userLocation!.latitude, widget.userLocation!.longitude),
+        widget.isNavigating ? 16.0 : 14.5,
+      );
+      return;
+    }
+
+    // 2. Camera follow user position during live navigation
+    if (widget.isNavigating &&
+        widget.isCameraFollowing &&
+        widget.userLocation != null) {
+      final oldLoc = oldWidget.userLocation;
+      final newLoc = widget.userLocation!;
+      if (oldLoc == null ||
+          oldLoc.latitude != newLoc.latitude ||
+          oldLoc.longitude != newLoc.longitude) {
+        _mapController.move(
+          _toLatLng(newLoc.latitude, newLoc.longitude),
+          _mapController.camera.zoom.clamp(14.0, 18.0),
+        );
+      }
+    }
+  }
+
+  List<fmap.Polyline> _buildRoutePolylines() {
+    final result = <fmap.Polyline>[];
+
+    // Background polylines (alternatives)
+    for (final polyline in widget.polylines) {
+      if (polyline.points.isEmpty) continue;
+
+      result.add(
+        fmap.Polyline(
+          points: polyline.points
+              .map((point) => _toLatLng(point.latitude, point.longitude))
+              .toList(),
+          color: polyline.color.withOpacity(0.20),
+          strokeWidth: polyline.width.toDouble() + 6,
+          strokeCap: StrokeCap.round,
+          strokeJoin: StrokeJoin.round,
+        ),
+      );
+
+      result.add(
+        fmap.Polyline(
+          points: polyline.points
+              .map((point) => _toLatLng(point.latitude, point.longitude))
+              .toList(),
+          color: polyline.color,
+          strokeWidth: polyline.width.toDouble(),
+          strokeCap: StrokeCap.round,
+          strokeJoin: StrokeJoin.round,
+        ),
+      );
+    }
+
+    // Active journey selected route with Completed vs Remaining split
+    if (widget.activePolylinePoints != null &&
+        widget.activePolylinePoints!.isNotEmpty) {
+      final allPoints = widget.activePolylinePoints!;
+      final splitIdx =
+          (widget.completedPolylineIndex ?? 0).clamp(0, allPoints.length - 1);
+
+      if (widget.isNavigating && splitIdx > 0) {
+        // 1. Completed portion (muted gray)
+        final completedPts = allPoints
+            .sublist(0, splitIdx + 1)
+            .map((p) => _toLatLng(p.latitude, p.longitude))
+            .toList();
+
+        if (completedPts.length > 1) {
+          result.add(
+            fmap.Polyline(
+              points: completedPts,
+              color: Colors.grey.withOpacity(0.55),
+              strokeWidth: 5,
+              strokeCap: StrokeCap.round,
+              strokeJoin: StrokeJoin.round,
+            ),
+          );
+        }
+      }
+
+      // 2. Remaining portion (vibrant SafeHer green)
+      final startIdx = widget.isNavigating ? splitIdx : 0;
+      final remainingPts = allPoints
+          .sublist(startIdx)
+          .map((p) => _toLatLng(p.latitude, p.longitude))
+          .toList();
+
+      if (remainingPts.isNotEmpty) {
+        result.add(
+          fmap.Polyline(
+            points: remainingPts,
+            color: AppColors.safeGreen.withOpacity(0.25),
+            strokeWidth: 14,
+            strokeCap: StrokeCap.round,
+            strokeJoin: StrokeJoin.round,
+          ),
+        );
+
+        result.add(
+          fmap.Polyline(
+            points: remainingPts,
+            color: AppColors.safeGreen,
+            strokeWidth: 7,
+            strokeCap: StrokeCap.round,
+            strokeJoin: StrokeJoin.round,
+          ),
+        );
+      }
+    }
+
+    return result;
+  }
+
+  Widget _navigationArrowPuck(double bearing) {
+    return Transform.rotate(
+      angle: bearing * math.pi / 180.0,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Outer halo
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.primary.withOpacity(0.22),
+            ),
+          ),
+          // White border
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.28),
+                  blurRadius: 7,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+          ),
+          // Directional Arrow Puck
+          Container(
+            width: 30,
+            height: 30,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.primary,
+            ),
+            child: const Icon(
+              Icons.navigation_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _blueDotMarker() {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Pulsing soft blue outer halo
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF4285F4).withOpacity(0.24),
+          ),
+        ),
+        // White border ring with elevation shadow
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.25),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+        ),
+        // Vibrant Google blue center dot
+        Container(
+          width: 14,
+          height: 14,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: Color(0xFF1A73E8),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _locationMarker({
+    required Color color,
+    required IconData icon,
+    double size = 42,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        border: Border.all(
+          color: color.withOpacity(0.85),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 7,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Icon(
+        icon,
+        color: color,
+        size: size * 0.48,
+      ),
+    );
+  }
+
+  Widget _safeSpotMarker({
+    required Color color,
+    required IconData icon,
+  }) {
+    return Container(
+      width: 34,
+      height: 34,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        border: Border.all(
+          color: color,
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.16),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Icon(
+        icon,
+        color: color,
+        size: 18,
+      ),
+    );
+  }
+
+  List<fmap.Marker> _buildSafetyMarkers() {
+    final markers = <fmap.Marker>[];
+    final spots = widget.safeSpots;
+    if (spots == null) return markers;
+
+    if (widget.showPolice) {
+      for (final police in spots.policeStations) {
+        markers.add(
+          fmap.Marker(
+            point: _toLatLng(police.latitude, police.longitude),
+            width: 38,
+            height: 38,
+            child: Tooltip(
+              message: police.name,
+              child: _safeSpotMarker(
+                color: Colors.blue.shade700,
+                icon: Icons.local_police,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    if (widget.showHospitals) {
+      for (final hospital in spots.hospitals) {
+        markers.add(
+          fmap.Marker(
+            point: _toLatLng(hospital.latitude, hospital.longitude),
+            width: 38,
+            height: 38,
+            child: Tooltip(
+              message: hospital.name,
+              child: _safeSpotMarker(
+                color: Colors.red.shade700,
+                icon: Icons.local_hospital,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    if (widget.showTransit) {
+      for (final station in spots.transitStations) {
+        markers.add(
+          fmap.Marker(
+            point: _toLatLng(station.latitude, station.longitude),
+            width: 38,
+            height: 38,
+            child: Tooltip(
+              message: station.name,
+              child: _safeSpotMarker(
+                color: Colors.orange.shade700,
+                icon: Icons.directions_transit,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    if (widget.showBlackspots) {
+      for (final blackspot in spots.accidentBlackspots) {
+        markers.add(
+          fmap.Marker(
+            point: _toLatLng(blackspot.latitude, blackspot.longitude),
+            width: 38,
+            height: 38,
+            child: Tooltip(
+              message: blackspot.name,
+              child: _safeSpotMarker(
+                color: Colors.deepPurple.shade700,
+                icon: Icons.warning_amber_rounded,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
+    return markers;
+  }
+
+  List<fmap.Marker> _buildMainMarkers() {
+    final result = <fmap.Marker>[];
+
+    for (final marker in widget.markers) {
+      final id = marker.markerId.value.toLowerCase();
+      Color color;
+      IconData icon;
+
+      if (id.contains('origin') || id.contains('user')) {
+        color = Colors.cyan.shade700;
+        icon = Icons.my_location;
+      } else if (id.contains('dest')) {
+        color = AppColors.accent;
+        icon = Icons.location_on;
+      } else {
+        color = AppColors.primary;
+        icon = Icons.location_on;
+      }
+
+      final title = marker.infoWindow.title;
+      result.add(
+        fmap.Marker(
+          point: _toLatLng(
+            marker.position.latitude,
+            marker.position.longitude,
+          ),
+          width: 46,
+          height: 46,
+          child: Tooltip(
+            message: title ?? 'SafeHer AI location',
+            child: _locationMarker(
+              color: color,
+              icon: icon,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return result;
+  }
+
+  List<fmap.Marker> _buildJourneyMarkers() {
+    final result = <fmap.Marker>[];
+
+    if (widget.userLocation != null) {
+      if (widget.isNavigating) {
+        // Real-Time Turn-by-Turn Navigation Arrow / Puck
+        result.add(
+          fmap.Marker(
+            point: _toLatLng(
+              widget.userLocation!.latitude,
+              widget.userLocation!.longitude,
+            ),
+            width: 52,
+            height: 52,
+            child: _navigationArrowPuck(widget.userBearing ?? 0.0),
+          ),
+        );
+      } else {
+        // Real-Time Google-Maps-Style Blue Dot Location Marker
+        result.add(
+          fmap.Marker(
+            point: _toLatLng(
+              widget.userLocation!.latitude,
+              widget.userLocation!.longitude,
+            ),
+            width: 44,
+            height: 44,
+            child: Tooltip(
+              message: 'Your Current Location',
+              child: _blueDotMarker(),
+            ),
+          ),
+        );
+      }
+    }
+
+    if (widget.destinationLocation != null) {
+      result.add(
+        fmap.Marker(
+          point: _toLatLng(
+            widget.destinationLocation!.latitude,
+            widget.destinationLocation!.longitude,
+          ),
+          width: 48,
+          height: 48,
+          child: _locationMarker(
+            color: AppColors.accent,
+            icon: Icons.flag_rounded,
+            size: 46,
+          ),
+        ),
+      );
+    }
+
+    return result;
   }
 
   void _zoomIn() {
-    final matrix = _transformController.value.clone();
-    matrix.scale(1.25, 1.25);
-    _transformController.value = matrix;
+    final currentZoom = _mapController.camera.zoom;
+    _mapController.move(
+      _mapController.camera.center,
+      (currentZoom + 1).clamp(3.0, 19.0),
+    );
   }
 
   void _zoomOut() {
-    final matrix = _transformController.value.clone();
-    matrix.scale(0.8, 0.8);
-    _transformController.value = matrix;
+    final currentZoom = _mapController.camera.zoom;
+    _mapController.move(
+      _mapController.camera.center,
+      (currentZoom - 1).clamp(3.0, 19.0),
+    );
+  }
+
+  void _recenter() {
+    if (widget.onRecenter != null) {
+      widget.onRecenter!();
+    }
+    if (widget.userLocation != null) {
+      _mapController.move(
+        _toLatLng(
+          widget.userLocation!.latitude,
+          widget.userLocation!.longitude,
+        ),
+        16.0,
+      );
+    } else {
+      _mapController.move(
+        _toLatLng(
+          widget.initialCenter.latitude,
+          widget.initialCenter.longitude,
+        ),
+        13.5,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFE9EDF2),
-      child: Stack(
-        children: [
-          // 1. Interactive Panning & Zooming Map Canvas
-          InteractiveViewer(
-            transformationController: _transformController,
-            boundaryMargin: const EdgeInsets.all(300),
-            minScale: 0.6,
-            maxScale: 3.5,
-            child: SizedBox.expand(
-              child: CustomPaint(
-                painter: _HyderabadMapCanvasPainter(
-                  polylines: widget.polylines,
-                  markers: widget.markers,
-                  activePolylinePoints: widget.activePolylinePoints,
-                  userLocation: widget.userLocation,
-                  destinationLocation: widget.destinationLocation,
-                  safeSpots: widget.safeSpots,
-                  showPolice: widget.showPolice,
-                  showHospitals: widget.showHospitals,
-                  showTransit: widget.showTransit,
-                  showBlackspots: widget.showBlackspots,
-                ),
-              ),
-            ),
-          ),
+    final centerTarget = widget.userLocation != null
+        ? _toLatLng(widget.userLocation!.latitude, widget.userLocation!.longitude)
+        : _toLatLng(widget.initialCenter.latitude, widget.initialCenter.longitude);
 
-          // 2. Subtle Watermark & Mode Pill
+    final allMarkers = <fmap.Marker>[
+      ..._buildSafetyMarkers(),
+      ..._buildMainMarkers(),
+      ..._buildJourneyMarkers(),
+    ];
+
+    return Stack(
+      children: [
+        // REAL OPENSTREETMAP / LEAFLET-STYLE MAP
+        fmap.FlutterMap(
+          mapController: _mapController,
+          options: fmap.MapOptions(
+            initialCenter: centerTarget,
+            initialZoom: widget.isNavigating ? 16.0 : 13.0,
+            minZoom: 5,
+            maxZoom: 19,
+            interactionOptions: const fmap.InteractionOptions(
+              flags: fmap.InteractiveFlag.all,
+            ),
+            onPositionChanged: (pos, hasGesture) {
+              if (hasGesture && widget.onPanStart != null) {
+                widget.onPanStart!();
+              }
+            },
+          ),
+          children: [
+            fmap.TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.example.safeher_ai',
+            ),
+            if (_buildRoutePolylines().isNotEmpty)
+              fmap.PolylineLayer(
+                polylines: _buildRoutePolylines(),
+              ),
+            if (allMarkers.isNotEmpty)
+              fmap.MarkerLayer(
+                markers: allMarkers,
+              ),
+            const fmap.RichAttributionWidget(
+              attributions: [
+                fmap.TextSourceAttribution('OpenStreetMap contributors'),
+              ],
+            ),
+          ],
+        ),
+
+        // SafeHer map identity (shown when browsing/home map, hidden during active navigation HUD)
+        if (!widget.isNavigating)
           Positioned(
-            top: 50,
+            top: 14,
             left: 16,
-            right: 16,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.92),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.border),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2)),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.shield_outlined, size: 14, color: AppColors.primary),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        widget.corridorTitle ?? 'SafeHer AI • Demo Map',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'Demo Canvas',
-                        style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 7,
             ),
-          ),
-
-          // 3. Quick Map Controls (Zoom In, Zoom Out, Center)
-          Positioned(
-            right: 14,
-            bottom: 220,
-            child: Column(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.94),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _buildMapControlBtn(icon: Icons.add, onPressed: _zoomIn),
-                const SizedBox(height: 6),
-                _buildMapControlBtn(icon: Icons.remove, onPressed: _zoomOut),
-                const SizedBox(height: 6),
-                _buildMapControlBtn(icon: Icons.my_location, onPressed: _resetZoom),
+                const Icon(
+                  Icons.shield_outlined,
+                  size: 16,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  widget.corridorTitle ?? 'SafeHer AI',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMapControlBtn({required IconData icon, required VoidCallback onPressed}) {
-    return Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: IconButton(
-        icon: Icon(icon, size: 18, color: AppColors.textPrimary),
-        padding: EdgeInsets.zero,
-        onPressed: onPressed,
-      ),
-    );
-  }
-}
-
-class _HyderabadMapCanvasPainter extends CustomPainter {
-  final Set<Polyline> polylines;
-  final Set<Marker> markers;
-  final List<CoordinatePoint>? activePolylinePoints;
-  final CoordinatePoint? userLocation;
-  final CoordinatePoint? destinationLocation;
-  final NearbySafeSpots? safeSpots;
-  final bool showPolice;
-  final bool showHospitals;
-  final bool showTransit;
-  final bool showBlackspots;
-
-  // Hyderabad bounding coordinates for projection
-  static const double minLat = 17.3000;
-  static const double maxLat = 17.5200;
-  static const double minLon = 78.3000;
-  static const double maxLon = 78.5800;
-
-  _HyderabadMapCanvasPainter({
-    required this.polylines,
-    required this.markers,
-    this.activePolylinePoints,
-    this.userLocation,
-    this.destinationLocation,
-    this.safeSpots,
-    required this.showPolice,
-    required this.showHospitals,
-    required this.showTransit,
-    required this.showBlackspots,
-  });
-
-  Offset _project(double lat, double lon, Size size) {
-    // Mercator-like 2D projection normalized to canvas size
-    final nx = (lon - minLon) / (maxLon - minLon);
-    final ny = (maxLat - lat) / (maxLat - minLat); // Invert Y (screen coords)
-    return Offset(
-      (nx * size.width).clamp(0.0, size.width),
-      (ny * size.height).clamp(0.0, size.height),
-    );
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // 1. Draw Grid Roads & Urban Corridors
-    final roadPaint = Paint()
-      ..color = Colors.white.withOpacity(0.7)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.5;
-
-    final secondaryRoadPaint = Paint()
-      ..color = const Color(0xFFDCE2EB)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-
-    final waterPaint = Paint()
-      ..color = const Color(0xFFCDE5F7)
-      ..style = PaintingStyle.fill;
-
-    // Hussain Sagar Lake in central Hyderabad
-    final lakeCenter = _project(17.4239, 78.4738, size);
-    canvas.drawOval(
-      Rect.fromCenter(center: lakeCenter, width: 70, height: 55),
-      waterPaint,
-    );
-
-    // Osman Sagar / Gandipet in West Hyderabad
-    final osmanCenter = _project(17.3750, 78.3150, size);
-    canvas.drawOval(
-      Rect.fromCenter(center: osmanCenter, width: 60, height: 45),
-      waterPaint,
-    );
-
-    // Major Hyderabad arterial network lines
-    final arteries = [
-      // Outer Ring Road (ORR West / North arc)
-      [_project(17.3400, 78.3300, size), _project(17.4300, 78.3500, size), _project(17.4900, 78.3800, size), _project(17.5100, 78.4800, size)],
-      // Hitec City to Secunderabad Corridor (via Begumpet)
-      [_project(17.4435, 78.3772, size), _project(17.4260, 78.4120, size), _project(17.4420, 78.4680, size), _project(17.4399, 78.4983, size)],
-      // Gachibowli to Banjara Hills
-      [_project(17.4400, 78.3489, size), _project(17.4300, 78.3900, size), _project(17.4156, 78.4350, size)],
-      // Old City / Charminar to Lakdikapul
-      [_project(17.3616, 78.4747, size), _project(17.3900, 78.4700, size), _project(17.4050, 78.4600, size)],
-      // Kukatpally to Ameerpet
-      [_project(17.4938, 78.3995, size), _project(17.4600, 78.4200, size), _project(17.4375, 78.4482, size)],
-    ];
-
-    for (final artery in arteries) {
-      final path = Path()..moveTo(artery[0].dx, artery[0].dy);
-      for (int i = 1; i < artery.length; i++) {
-        path.lineTo(artery[i].dx, artery[i].dy);
-      }
-      canvas.drawPath(path, roadPaint);
-    }
-
-    // Secondary urban grid lines
-    for (double y = 40; y < size.height; y += 75) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), secondaryRoadPaint);
-    }
-    for (double x = 40; x < size.width; x += 75) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), secondaryRoadPaint);
-    }
-
-    // 2. Draw Landmark Corridor Labels
-    final landmarks = [
-      {'name': 'Hitec City', 'pos': _project(17.4435, 78.3772, size)},
-      {'name': 'Gachibowli', 'pos': _project(17.4400, 78.3489, size)},
-      {'name': 'Jubilee Hills', 'pos': _project(17.4310, 78.4070, size)},
-      {'name': 'Banjara Hills', 'pos': _project(17.4156, 78.4350, size)},
-      {'name': 'Begumpet', 'pos': _project(17.4420, 78.4680, size)},
-      {'name': 'Secunderabad', 'pos': _project(17.4399, 78.4983, size)},
-      {'name': 'Charminar', 'pos': _project(17.3616, 78.4747, size)},
-      {'name': 'Kukatpally', 'pos': _project(17.4938, 78.3995, size)},
-    ];
-
-    for (final lm in landmarks) {
-      final pos = lm['pos'] as Offset;
-      final name = lm['name'] as String;
-
-      // Small hub dot
-      canvas.drawCircle(pos, 3.5, Paint()..color = const Color(0xFF94A3B8));
-
-      final textSpan = TextSpan(
-        text: name,
-        style: const TextStyle(
-          color: Color(0xFF64748B),
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
         ),
-      );
-      final textPainter = TextPainter(
-        text: textSpan,
-        textDirection: TextDirection.ltr,
-      )..layout();
-      textPainter.paint(canvas, Offset(pos.dx + 6, pos.dy - 6));
-    }
 
-    // 3. Draw Actual Route Polylines (if available from selected route or active journey)
-    if (activePolylinePoints != null && activePolylinePoints!.isNotEmpty) {
-      _drawRoutePoints(canvas, size, activePolylinePoints!, AppColors.safeGreen, 6.0);
-    } else {
-      for (final poly in polylines) {
-        if (poly.points.isNotEmpty) {
-          final pts = poly.points.map((p) => CoordinatePoint(latitude: p.latitude, longitude: p.longitude)).toList();
-          _drawRoutePoints(canvas, size, pts, poly.color, poly.width.toDouble().clamp(3.0, 7.0));
-        }
-      }
-    }
-
-    // 4. Draw Markers (Police, Hospitals, Transit, Blackspots, Origin, Destination)
-    if (safeSpots != null) {
-      if (showPolice) {
-        for (final p in safeSpots!.policeStations) {
-          _drawPin(canvas, _project(p.latitude, p.longitude, size), Colors.blue.shade700, Icons.local_police);
-        }
-      }
-      if (showHospitals) {
-        for (final h in safeSpots!.hospitals) {
-          _drawPin(canvas, _project(h.latitude, h.longitude, size), Colors.red.shade700, Icons.local_hospital);
-        }
-      }
-      if (showTransit) {
-        for (final t in safeSpots!.transitStations) {
-          _drawPin(canvas, _project(t.latitude, t.longitude, size), Colors.orange.shade700, Icons.directions_subway);
-        }
-      }
-      if (showBlackspots) {
-        for (final b in safeSpots!.accidentBlackspots) {
-          _drawPin(canvas, _project(b.latitude, b.longitude, size), Colors.purple.shade700, Icons.warning_amber);
-        }
-      }
-    }
-
-    // Draw GoogleMap markers passed in widget
-    for (final m in markers) {
-      final pos = _project(m.position.latitude, m.position.longitude, size);
-      if (m.markerId.value.contains('origin') || m.markerId.value.contains('user')) {
-        _drawPulsingUserPin(canvas, pos, Colors.cyan.shade600);
-      } else if (m.markerId.value.contains('dest')) {
-        _drawDestinationPin(canvas, pos, AppColors.accent);
-      } else {
-        _drawPin(canvas, pos, AppColors.primary, Icons.location_on);
-      }
-    }
-
-    if (userLocation != null) {
-      final pos = _project(userLocation!.latitude, userLocation!.longitude, size);
-      _drawPulsingUserPin(canvas, pos, Colors.cyan.shade600);
-    }
-
-    if (destinationLocation != null) {
-      final pos = _project(destinationLocation!.latitude, destinationLocation!.longitude, size);
-      _drawDestinationPin(canvas, pos, AppColors.accent);
-    }
+        // Map controls
+        Positioned(
+          right: 14,
+          bottom: 210,
+          child: Column(
+            children: [
+              _mapControl(
+                icon: Icons.add,
+                onPressed: _zoomIn,
+              ),
+              const SizedBox(height: 7),
+              _mapControl(
+                icon: Icons.remove,
+                onPressed: _zoomOut,
+              ),
+              const SizedBox(height: 7),
+              _mapControl(
+                icon: widget.isCameraFollowing
+                    ? Icons.navigation_rounded
+                    : Icons.my_location,
+                iconColor: widget.isCameraFollowing
+                    ? AppColors.primary
+                    : AppColors.textPrimary,
+                onPressed: _recenter,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
-  void _drawRoutePoints(Canvas canvas, Size size, List<CoordinatePoint> points, Color color, double width) {
-    if (points.isEmpty) return;
-
-    // Glowing outer stroke
-    final glowPaint = Paint()
-      ..color = color.withOpacity(0.35)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = width + 5.0
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    // Core stroke
-    final corePaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = width
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final path = Path();
-    final first = _project(points.first.latitude, points.first.longitude, size);
-    path.moveTo(first.dx, first.dy);
-
-    for (int i = 1; i < points.length; i++) {
-      final pt = _project(points[i].latitude, points[i].longitude, size);
-      path.lineTo(pt.dx, pt.dy);
-    }
-
-    canvas.drawPath(path, glowPaint);
-    canvas.drawPath(path, corePaint);
-
-    // Start & End indicator dots
-    final startPt = _project(points.first.latitude, points.first.longitude, size);
-    final endPt = _project(points.last.latitude, points.last.longitude, size);
-    _drawPulsingUserPin(canvas, startPt, Colors.cyan.shade600);
-    _drawDestinationPin(canvas, endPt, AppColors.accent);
-  }
-
-  void _drawPin(Canvas canvas, Offset pos, Color color, IconData icon) {
-    canvas.drawCircle(pos, 5.0, Paint()..color = color);
-    canvas.drawCircle(pos, 7.5, Paint()..color = color.withOpacity(0.25)..style = PaintingStyle.stroke..strokeWidth = 1.5);
-  }
-
-  void _drawPulsingUserPin(Canvas canvas, Offset pos, Color color) {
-    // Outer pulse ring
-    canvas.drawCircle(pos, 13.0, Paint()..color = color.withOpacity(0.25));
-    // Middle ring
-    canvas.drawCircle(pos, 8.0, Paint()..color = Colors.white);
-    // Center point
-    canvas.drawCircle(pos, 5.5, Paint()..color = color);
-  }
-
-  void _drawDestinationPin(Canvas canvas, Offset pos, Color color) {
-    // Outer pin badge
-    canvas.drawCircle(pos, 10.0, Paint()..color = color);
-    canvas.drawCircle(pos, 6.0, Paint()..color = Colors.white);
-    canvas.drawCircle(pos, 4.0, Paint()..color = color);
-  }
-
-  @override
-  bool shouldRepaint(covariant _HyderabadMapCanvasPainter oldDelegate) {
-    return true;
+  Widget _mapControl({
+    required IconData icon,
+    required VoidCallback onPressed,
+    Color? iconColor,
+  }) {
+    return Material(
+      color: Colors.white,
+      elevation: 4,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onPressed,
+        child: SizedBox(
+          width: 42,
+          height: 42,
+          child: Icon(
+            icon,
+            size: 20,
+            color: iconColor ?? AppColors.textPrimary,
+          ),
+        ),
+      ),
+    );
   }
 }

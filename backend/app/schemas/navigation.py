@@ -63,6 +63,39 @@ class EnrichedRoute(BaseModel):
     components: ComponentScores = Field(..., description="Normalized component values")
     contributions: ComponentContributions = Field(..., description="Points awarded per factor out of 100")
     raw_features: RawFeatures = Field(..., description="Raw spatial dataset measurements")
+    steps: List["NavigationStep"] = Field(default_factory=list, description="Turn-by-turn navigation steps")
+
+
+class NavigationStep(BaseModel):
+    """A single turn-by-turn navigation maneuver step."""
+    step_index: int = Field(..., description="Sequential step index")
+    instruction: str = Field(..., description="Human-readable driving or walking instruction")
+    maneuver_type: str = Field(default="turn", description="Maneuver type: depart, turn, continue, roundabout, arrive")
+    modifier: Optional[str] = Field(None, description="Modifier: left, right, slight left, slight right, straight, uturn")
+    road_name: str = Field(default="", description="Name of the street or road")
+    distance_meters: float = Field(default=0.0, description="Distance for this step in meters")
+    duration_seconds: float = Field(default=0.0, description="Estimated duration in seconds")
+    latitude: float = Field(..., description="Latitude of maneuver point")
+    longitude: float = Field(..., description="Longitude of maneuver point")
+    bearing: Optional[float] = Field(None, description="Heading/bearing after maneuver in degrees (0-360)")
+
+
+class NavigationRouteRequest(BaseModel):
+    """Request for real-time turn-by-turn navigation steps and geometry."""
+    origin_lat: float = Field(..., ge=-90.0, le=90.0)
+    origin_lon: float = Field(..., ge=-180.0, le=180.0)
+    dest_lat: float = Field(..., ge=-90.0, le=90.0)
+    dest_lon: float = Field(..., ge=-180.0, le=180.0)
+    travel_mode: str = Field(default="driving", description="driving or walking")
+
+
+class NavigationRouteResponse(BaseModel):
+    """Response containing turn-by-turn navigation route steps and polyline geometry."""
+    distance_km: float = Field(..., description="Total route distance in km")
+    duration_min: float = Field(..., description="Total route duration in minutes")
+    polyline_coords: List[CoordinatePoint] = Field(..., description="Full route polyline coordinate list")
+    steps: List[NavigationStep] = Field(default_factory=list, description="Turn-by-turn maneuver steps")
+    summary: str = Field(default="Navigated route", description="Corridor summary")
 
 
 class RoutePlanResponse(BaseModel):

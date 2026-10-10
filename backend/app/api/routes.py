@@ -21,6 +21,8 @@ from ..schemas.navigation import (
     RoutePlanRequest,
     RoutePlanResponse,
     PlaceSuggestion,
+    NavigationRouteRequest,
+    NavigationRouteResponse,
 )
 from ..schemas.amenity import NearbySafeSpotsResponse
 from ..schemas.sos import (
@@ -119,7 +121,7 @@ async def score_route(request: RouteScoreRequest) -> RouteScoreResponse:
     ),
     tags=["Navigation & Routing"],
 )
-async def plan_routes(request: RoutePlanRequest) -> RoutePlanResponse:
+def plan_routes(request: RoutePlanRequest) -> RoutePlanResponse:
     """Plans routes, scores alternatives, and identifies the safer route."""
     try:
         response = NavigationService.plan_and_score_routes(request)
@@ -136,6 +138,28 @@ async def plan_routes(request: RoutePlanRequest) -> RoutePlanResponse:
         )
 
 
+@router.post(
+    "/api/v1/navigation/route",
+    response_model=NavigationRouteResponse,
+    summary="Real-Time Turn-By-Turn Navigation Route & Maneuvers",
+    description=(
+        "Returns road geometry and sequential turn-by-turn instructions (e.g. Turn right in 200m) "
+        "powered by OSRM real-world road network with automatic fallback."
+    ),
+    tags=["Navigation & Routing"],
+)
+def get_navigation_route(request: NavigationRouteRequest) -> NavigationRouteResponse:
+    """Provides turn-by-turn maneuvers and route polyline for live navigation."""
+    try:
+        return NavigationService.get_navigation_route(request)
+    except Exception as err:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Navigation route error: {str(err)}",
+        )
+
+
+
 # ==============================================================================
 # Places Autocomplete & Search
 # ==============================================================================
@@ -146,12 +170,27 @@ async def plan_routes(request: RoutePlanRequest) -> RoutePlanResponse:
     description="Returns autocompletion suggestions for Hyderabad locations and landmarks.",
     tags=["Navigation & Routing"],
 )
-async def autocomplete_places(
+def autocomplete_places(
     q: str = Query(..., min_length=1, description="Search query string"),
     limit: int = Query(6, ge=1, le=20, description="Maximum number of results"),
 ) -> List[PlaceSuggestion]:
     """Provides search autocomplete suggestions for Hyderabad locations."""
     return NavigationService.search_places(query=q, limit=limit)
+
+
+@router.get(
+    "/api/v1/places/reverse-geocode",
+    summary="Reverse Geocode Coordinates",
+    description="Resolves latitude and longitude coordinates to a recognizable location name in Hyderabad.",
+    tags=["Navigation & Routing"],
+)
+def reverse_geocode(
+    lat: float = Query(..., ge=-90.0, le=90.0, description="Latitude"),
+    lon: float = Query(..., ge=-180.0, le=180.0, description="Longitude"),
+) -> Dict[str, Any]:
+    """Reverse geocodes device GPS coordinates to a recognized address or landmark."""
+    address = NavigationService.reverse_geocode(lat, lon)
+    return {"address": address, "latitude": lat, "longitude": lon}
 
 
 # ==============================================================================
@@ -167,7 +206,7 @@ async def autocomplete_places(
     ),
     tags=["Safe Spots & Amenities"],
 )
-async def nearby_safe_spots(
+def nearby_safe_spots(
     lat: float = Query(..., ge=-90.0, le=90.0, description="Latitude"),
     lon: float = Query(..., ge=-180.0, le=180.0, description="Longitude"),
     radius_km: float = Query(5.0, ge=0.5, le=25.0, description="Search radius in kilometers"),

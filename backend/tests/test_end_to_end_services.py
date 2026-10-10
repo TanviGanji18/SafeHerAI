@@ -91,6 +91,37 @@ class TestNavigationAndRoutePlanning(unittest.TestCase):
         self.assertIn("Charminar", data["destination_name"])
         self.assertGreaterEqual(len(data["routes"]), 1)
 
+    def test_navigation_maneuver_distances_are_realistic_and_non_negative(self):
+        """Regression test ensuring route steps have realistic, positive distances within Hyderabad."""
+        payload = {
+            "origin": {"address": "Secunderabad Railway Station"},
+            "destination": {"address": "Charminar, Old City"},
+            "travel_mode": "driving",
+        }
+        response = client.post("/api/v1/routes/plan", json=payload)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        routes = data["routes"]
+        self.assertGreater(len(routes), 0)
+
+        for route in routes:
+            steps = route.get("steps", [])
+            self.assertGreater(len(steps), 0, "Route must contain navigation steps")
+            total_route_m = route["distance_km"] * 1000.0
+
+            # Step 0 (depart) must have a realistic non-negative distance
+            first_step = steps[0]
+            self.assertGreaterEqual(first_step["distance_meters"], 0.0)
+            self.assertLessEqual(first_step["distance_meters"], total_route_m)
+            # Ensure not an astronomical or transatlantic distance like 13545 km
+            self.assertLess(first_step["distance_meters"], 50000.0)
+
+            # Check coordinate bounds (Hyderabad: lat ~ 17.x, lon ~ 78.x)
+            for s in steps:
+                self.assertGreaterEqual(s["distance_meters"], 0.0)
+                self.assertTrue(17.0 <= s["latitude"] <= 18.0, f"Latitude {s['latitude']} outside Hyderabad")
+                self.assertTrue(78.0 <= s["longitude"] <= 79.0, f"Longitude {s['longitude']} outside Hyderabad")
+
     def test_autocomplete_places(self):
         response = client.get("/api/v1/places/autocomplete?q=Hitec")
         self.assertEqual(response.status_code, 200)
@@ -98,6 +129,26 @@ class TestNavigationAndRoutePlanning(unittest.TestCase):
         self.assertIsInstance(suggestions, list)
         self.assertGreater(len(suggestions), 0)
         self.assertIn("Hitec", suggestions[0]["description"])
+
+    def test_reverse_geocode_endpoint(self):
+        # Coordinates near Charminar (17.3616, 78.4747)
+        response = client.get("/api/v1/places/reverse-geocode?lat=17.3616&lon=78.4747")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("address", data)
+        self.assertIn("Charminar", data["address"])
+        self.assertEqual(data["latitude"], 17.3616)
+        self.assertEqual(data["longitude"], 78.4747)
+
+    def test_plan_routes_invalid_address_returns_400(self):
+        payload = {
+            "origin": {"address": "NonExistentPlaceXYZ987654321"},
+            "destination": {"address": "Charminar, Old City"},
+            "travel_mode": "driving",
+        }
+        response = client.post("/api/v1/routes/plan", json=payload)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Unable to locate", response.json()["detail"])
 
 
 class TestNearbySafeSpots(unittest.TestCase):

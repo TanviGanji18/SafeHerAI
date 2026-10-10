@@ -19,6 +19,7 @@ class ActiveJourneyScreen extends StatefulWidget {
 class _ActiveJourneyScreenState extends State<ActiveJourneyScreen> {
   // ignore: unused_field
   GoogleMapController? _mapController;
+  bool _arrivalDialogShown = false;
 
   @override
   void initState() {
@@ -149,6 +150,9 @@ class _ActiveJourneyScreenState extends State<ActiveJourneyScreen> {
   }
 
   void _handleArrivalOrEnd(BuildContext context) {
+    if (_arrivalDialogShown) return;
+    _arrivalDialogShown = true;
+
     final journeyProv = Provider.of<JourneyProvider>(context, listen: false);
     journeyProv.triggerDestinationReached();
 
@@ -215,11 +219,21 @@ class _ActiveJourneyScreenState extends State<ActiveJourneyScreen> {
       );
     }
 
+    // Auto-trigger arrival dialog if reached during live navigation
+    if (journeyProv.isDestinationReached && !_arrivalDialogShown) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _handleArrivalOrEnd(context);
+      });
+    }
+
     final route = journey.selectedRoute;
     final initialCam = CameraPosition(
       target: journeyProv.currentLocation ?? const LatLng(AppConstants.hyderabadCenterLat, AppConstants.hyderabadCenterLon),
-      zoom: 14.5,
+      zoom: 16.0,
     );
+
+    final currentManeuver = journeyProv.currentStep;
+    final nextManeuver = journeyProv.nextStep;
 
     return Scaffold(
       body: Stack(
@@ -236,73 +250,269 @@ class _ActiveJourneyScreenState extends State<ActiveJourneyScreen> {
                   onMapCreated: (ctrl) => _mapController = ctrl,
                 )
               : SafeHerDemoMap(
-                  initialCenter: journeyProv.currentLocation ?? const LatLng(AppConstants.hyderabadCenterLat, AppConstants.hyderabadCenterLon),
+                  initialCenter: journeyProv.currentLocation ??
+                      const LatLng(AppConstants.hyderabadCenterLat, AppConstants.hyderabadCenterLon),
                   polylines: _buildPolylines(journeyProv),
                   markers: _buildMarkers(journeyProv),
                   activePolylinePoints: route.polylineCoords,
                   userLocation: journeyProv.currentLocation != null
-                      ? CoordinatePoint(latitude: journeyProv.currentLocation!.latitude, longitude: journeyProv.currentLocation!.longitude)
+                      ? CoordinatePoint(
+                          latitude: journeyProv.currentLocation!.latitude,
+                          longitude: journeyProv.currentLocation!.longitude,
+                        )
                       : null,
                   destinationLocation: journeyProv.destinationLocation != null
-                      ? CoordinatePoint(latitude: journeyProv.destinationLocation!.latitude, longitude: journeyProv.destinationLocation!.longitude)
+                      ? CoordinatePoint(
+                          latitude: journeyProv.destinationLocation!.latitude,
+                          longitude: journeyProv.destinationLocation!.longitude,
+                        )
                       : null,
-                  corridorTitle: 'Active Navigation • ${route.summary}',
+                  userBearing: journeyProv.currentBearing,
+                  completedPolylineIndex: journeyProv.completedPolylineIndex,
+                  isNavigating: journeyProv.isNavigating,
+                  isCameraFollowing: journeyProv.isCameraFollowing,
+                  onRecenter: () => journeyProv.setCameraFollowing(true),
+                  onPanStart: () => journeyProv.setCameraFollowing(false),
+                  corridorTitle: (route.summary.trim().isNotEmpty && route.summary != 'null')
+                      ? route.summary
+                      : 'Recommended Safer Corridor',
                 ),
 
-          // 2. Top Navigation HUD Banner
+          // 2. Turn-By-Turn HUD Banner (Google Maps Navigation Style)
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Navigation Guidance Card
+                  // Primary Navigation Maneuver Card
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.96),
-                      borderRadius: BorderRadius.circular(16),
+                      color: const Color(0xFF0F5132), // Emerald Navigation Green
+                      borderRadius: BorderRadius.circular(18),
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 4)),
-                      ],
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(7),
-                          decoration: BoxDecoration(
-                            color: route.isRecommendedSafer ? AppColors.safeGreen : AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.navigation, color: Colors.white, size: 18),
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.28),
+                          blurRadius: 14,
+                          offset: const Offset(0, 5),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                journeyProv.currentInstruction,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: AppColors.textPrimary),
+                      ],
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Row 1: Compact "Active" status indicator + "Navigation in progress" title + Safety Badge
+                        Row(
+                          children: [
+                            if (journeyProv.isNavigating && !journeyProv.isDestinationReached) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF25D366).withOpacity(0.25),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: const Color(0xFF25D366), width: 1),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Color(0xFF25D366),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    const Text(
+                                      'Active',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                            const Expanded(
+                              child: Text(
+                                'Navigation in progress',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13.5,
+                                  letterSpacing: 0.2,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'To: ${journey.destination['address'] ?? journey.destination['name'] ?? 'Destination'}',
-                                style: const TextStyle(fontSize: 10.5, color: AppColors.textSecondary),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                            ),
+                            SafetyBadge(
+                              score: route.safetyScore,
+                              tier: route.safetyTier,
+                              isCompact: true,
+                            ),
+                          ],
+                        ),
+
+                        // Row 2: Secondary line with actual road or route name
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 8),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.alt_route_rounded, size: 13, color: Colors.white70),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  (route.summary.trim().isNotEmpty && route.summary != 'null')
+                                      ? route.summary
+                                      : 'Recommended Safer Corridor',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SafetyBadge(score: route.safetyScore, tier: route.safetyTier, isCompact: true),
+
+                        const Divider(color: Colors.white24, height: 1),
+                        const SizedBox(height: 10),
+
+                        // Row 3: Next turn maneuver icon + instruction + preview
+                        Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.18),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                currentManeuver?.icon ?? Icons.navigation_rounded,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    journeyProv.currentInstruction,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14.5,
+                                      height: 1.2,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (nextManeuver != null) ...[
+                                    const SizedBox(height: 3),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          nextManeuver.icon,
+                                          color: Colors.white70,
+                                          size: 13,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            'Then: ${nextManeuver.instruction}',
+                                            style: const TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 11,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
+
+                  // Off-Route Warning Banner with Recalculation
+                  if (journeyProv.isOffRoute)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade900,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.18),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.wrong_location_outlined, color: Colors.white, size: 18),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Off route detected',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          journeyProv.isRecalculating
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : InkWell(
+                                  onTap: () => journeyProv.recalculateRoute(),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'RECALCULATE',
+                                      style: TextStyle(
+                                        color: Colors.amber.shade900,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                        ],
+                      ),
+                    ),
 
                   // Emergency SOS Active Banner (if SOS triggered)
                   if (journeyProv.emergencyActive)
@@ -313,7 +523,10 @@ class _ActiveJourneyScreenState extends State<ActiveJourneyScreen> {
                         color: AppColors.emergencyRed,
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
-                          BoxShadow(color: AppColors.emergencyRed.withOpacity(0.4), blurRadius: 8),
+                          BoxShadow(
+                            color: AppColors.emergencyRed.withOpacity(0.4),
+                            blurRadius: 8,
+                          ),
                         ],
                       ),
                       child: Row(
@@ -323,15 +536,29 @@ class _ActiveJourneyScreenState extends State<ActiveJourneyScreen> {
                           const Expanded(
                             child: Text(
                               'SOS ACTIVE • GPS Shared With Police & Contacts',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
                             ),
                           ),
                           InkWell(
                             onTap: () => _callHelpline('100'),
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(6)),
-                              child: const Text('DIAL 100', style: TextStyle(color: AppColors.emergencyRed, fontWeight: FontWeight.bold, fontSize: 10)),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'DIAL 100',
+                                style: TextStyle(
+                                  color: AppColors.emergencyRed,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -342,7 +569,49 @@ class _ActiveJourneyScreenState extends State<ActiveJourneyScreen> {
             ),
           ),
 
-          // 3. Floating Persistent SOS Button (Accessible at all times)
+          // 3. Recenter Floating Indicator (if camera was manually panned)
+          if (!journeyProv.isCameraFollowing)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 195,
+              child: Center(
+                child: InkWell(
+                  onTap: () => journeyProv.setCameraFollowing(true),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.22),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.navigation_rounded, color: Colors.white, size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          'Re-center Camera',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+          // 4. Floating Persistent SOS Button
           Positioned(
             left: 20,
             bottom: 180,
@@ -353,11 +622,18 @@ class _ActiveJourneyScreenState extends State<ActiveJourneyScreen> {
               foregroundColor: Colors.white,
               elevation: 6,
               icon: const Icon(Icons.emergency, size: 22),
-              label: const Text('SOS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1.0)),
+              label: const Text(
+                'SOS',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                  letterSpacing: 1.0,
+                ),
+              ),
             ),
           ),
 
-          // 4. Quick Simulator Button (Advances coordinate along route for emulator demonstrations)
+          // 5. Quick Simulator Button (Advances coordinate along route for emulator tests)
           Positioned(
             right: 20,
             bottom: 180,
@@ -372,7 +648,7 @@ class _ActiveJourneyScreenState extends State<ActiveJourneyScreen> {
             ),
           ),
 
-          // 5. Bottom Navigation Card
+          // 6. Bottom Navigation Card
           Positioned(
             left: 16,
             right: 16,
@@ -393,22 +669,44 @@ class _ActiveJourneyScreenState extends State<ActiveJourneyScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('REMAINING TIME', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                            const Text(
+                              'ESTIMATED TIME',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
                             const SizedBox(height: 2),
                             Text(
                               '${journeyProv.remainingDurationMin.toStringAsFixed(0)} mins',
-                              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.textPrimary),
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.textPrimary,
+                              ),
                             ),
                           ],
                         ),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            const Text('DISTANCE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                            const Text(
+                              'DISTANCE REMAINING',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
                             const SizedBox(height: 2),
                             Text(
                               '${journeyProv.remainingDistanceKm.toStringAsFixed(1)} km',
-                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
                             ),
                           ],
                         ),
@@ -416,14 +714,17 @@ class _ActiveJourneyScreenState extends State<ActiveJourneyScreen> {
                     ),
                     const Divider(height: 20),
 
-                    // Actions Row: End Journey / Reached
+                    // Actions Row: End Journey
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: () => _handleArrivalOrEnd(context),
                             icon: const Icon(Icons.flag_outlined, size: 18),
-                            label: const Text('END JOURNEY', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            label: const Text(
+                              'END JOURNEY',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: AppColors.emergencyRed,
                               side: const BorderSide(color: AppColors.border),

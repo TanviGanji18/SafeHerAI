@@ -20,6 +20,8 @@ from ..core.config import (
     JWT_ALGORITHM,
     JWT_EXPIRATION_HOURS,
     FIREBASE_CREDENTIALS_PATH,
+    FIREBASE_CREDENTIALS_JSON,
+    FIREBASE_PROJECT_ID,
 )
 from ..schemas.user import (
     UserRegisterRequest,
@@ -36,22 +38,39 @@ _FIREBASE_INITIALIZED = False
 
 
 def _init_firebase_if_possible():
-    """Initializes Firebase Admin SDK if credentials file exists."""
+    """Initializes Firebase Admin SDK if credentials JSON or file exists."""
     global _FIREBASE_INITIALIZED
     if _FIREBASE_INITIALIZED:
         return True
     try:
+        import json
         import firebase_admin
         from firebase_admin import credentials
 
-        if FIREBASE_CREDENTIALS_PATH and os.path.exists(FIREBASE_CREDENTIALS_PATH):
-            cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
-            firebase_admin.initialize_app(cred)
+        app_options = {}
+        if FIREBASE_PROJECT_ID:
+            app_options["projectId"] = FIREBASE_PROJECT_ID
+
+        # 1. Prefer in-memory JSON string if provided (e.g. Render environment variable)
+        if FIREBASE_CREDENTIALS_JSON and FIREBASE_CREDENTIALS_JSON.strip():
+            cred_dict = json.loads(FIREBASE_CREDENTIALS_JSON.strip())
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred, options=app_options or None)
             _FIREBASE_INITIALIZED = True
             return True
-    except Exception:
-        pass
+
+        # 2. Fall back to local file path (e.g. Render Secret File or local development)
+        if FIREBASE_CREDENTIALS_PATH and os.path.exists(FIREBASE_CREDENTIALS_PATH):
+            cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
+            firebase_admin.initialize_app(cred, options=app_options or None)
+            _FIREBASE_INITIALIZED = True
+            return True
+    except Exception as e:
+        # Avoid printing secrets; log safe sanitized notice if debugging
+        if os.getenv("DEBUG", "False").lower() in ("true", "1"):
+            print(f"[AuthService] Note: Firebase initialization skipped or failed: {type(e).__name__}")
     return False
+
 
 
 def _hash_password(password: str, salt: str) -> str:
@@ -164,7 +183,7 @@ class AuthService:
         # Cache or retrieve existing profile to preserve custom emergency phone/name edits
         cached = _USERS_DB.get(uid)
         eff_name = cached["full_name"] if cached and cached.get("full_name") else full_name
-        eff_phone = cached["phone"] if cached and cached.get("phone") else "+919490616555"
+        eff_phone = cached.get("phone") if cached else None
 
         profile = UserProfile(
             id=uid,
@@ -197,7 +216,7 @@ class AuthService:
                 "id": user_id,
                 "email": f"{user_id}@safeher.ai" if "@" not in user_id else user_id,
                 "full_name": full_name or "SafeHer User",
-                "phone": phone or "+919490616555",
+                "phone": phone.strip() if phone and phone.strip() else None,
                 "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
             _USERS_DB[user_id] = target_rec

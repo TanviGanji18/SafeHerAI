@@ -1,9 +1,28 @@
-# Firebase Service Account Credentials & Secrets
-*-adminsdk-*.json
+﻿# ============================================================
+# SafeHer AI - Git Ignore Rules
+# ============================================================
+
+# Firebase Service Account Credentials & Private Keys
+# (Both the canonical file and any auto-downloaded copies)
 firebase-service-account.json
+*-adminsdk-*.json
 serviceAccountKey.json
-*.env
+
+# NOTE: google-services.json is intentionally NOT ignored.
+# It is required by Firebase Flutter SDK at build time (Android).
+# It contains no private key — only public project identifiers.
+
+# Environment files (contain secrets — never commit)
 .env
+.env.local
+.env.production
+*.env
+
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+.pytest_cache/
+
+# Project auto-generated structure dump
 project_structure.txt

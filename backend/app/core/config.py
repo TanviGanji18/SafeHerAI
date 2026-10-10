@@ -8,6 +8,13 @@ Provides safe defaults so the application operates seamlessly in offline/develop
 
 import os
 from typing import Optional
+from dotenv import load_dotenv
+
+# Load .env from project root (two levels above this file: app/core -> app -> backend -> root)
+_ROOT_DIR_FOR_ENV = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+_env_path = os.path.join(_ROOT_DIR_FOR_ENV, ".env")
+if os.path.exists(_env_path):
+    load_dotenv(dotenv_path=_env_path, override=False)
 
 # Base directories
 APP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -22,6 +29,24 @@ FIREBASE_CREDENTIALS_PATH: str = os.getenv(
     "FIREBASE_CREDENTIALS_PATH",
     _default_firebase_cred if os.path.exists(_default_firebase_cred) else "",
 )
+FIREBASE_PROJECT_ID: str = os.getenv("FIREBASE_PROJECT_ID", "")
+FIREBASE_CREDENTIALS_JSON: str = os.getenv("FIREBASE_CREDENTIALS_JSON", "")
+
+# Configurable CORS allowed origins (comma-separated list via ALLOWED_ORIGINS environment variable)
+_raw_cors = os.getenv("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS: list = [o.strip() for o in _raw_cors.split(",") if o.strip()] if _raw_cors else [
+    "http://localhost",
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://localhost:8080",
+    "http://127.0.0.1",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:8080",
+    "http://10.0.2.2",         # Android Studio emulator host loopback
+    "http://10.0.2.2:8000",
+]
+
 
 JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "safeherai_secret_key_hyderabad_2026_safe_routes")
 JWT_ALGORITHM: str = "HS256"
