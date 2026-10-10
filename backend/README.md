@@ -1,239 +1,216 @@
-# SafeHer AI – Backend API
+# SafeHer AI — FastAPI Backend API
 
-FastAPI backend powering the SafeHer AI route safety scoring engine for Hyderabad, India.
+**High-Performance Women-Safety Route-Scoring Engine & Navigation Service**
+
+The SafeHer AI backend is a production-grade REST API built using **Python 3.12 and FastAPI**. It powers the multi-criteria route safety scoring engine, calculates turn-by-turn navigation maneuvers, searches Hyderabad landmarks, indexes emergency amenities, and manages user journeys.
 
 ---
 
-## Backend Architecture
+## Live Cloud Deployment on Render
+
+The backend is deployed as a Web Service on Render:
+
+| Service | URL | Status / Notes |
+|---|---|---|
+| **Base URL** | `https://safeherai-4baw.onrender.com` | FastAPI ASGI Service |
+| **Health Check** | `https://safeherai-4baw.onrender.com/health` | Returns `{"status":"ok","service":"SafeHer AI backend"}` |
+| **Swagger UI** | `https://safeherai-4baw.onrender.com/docs` | Interactive OpenAPI documentation |
+| **ReDoc UI** | `https://safeherai-4baw.onrender.com/redoc` | Static documentation view |
+| **Web Client** | `https://safeherai-4baw.onrender.com/` | Interactive web interface |
+
+> [!NOTE]
+> On Render's free tier, containers spin down after 15 minutes of inactivity. When the backend receives a request while idle, Render triggers an automatic container spin-up (30–50 seconds). Once warm, endpoints respond in standard latency (<100ms).
+
+---
+
+## Architecture & Real Directory Structure
 
 ```
 backend/
 ├── app/
-│   ├── __init__.py
-│   ├── main.py                  # FastAPI application, CORS, exception handlers, startup
 │   ├── api/
 │   │   ├── __init__.py
-│   │   └── routes.py            # Endpoint registration (GET /health, POST /api/v1/safety/score)
+│   │   └── routes.py             # All 21 REST API endpoints
+│   ├── core/
+│   │   ├── __init__.py
+│   │   └── config.py             # Env loading, CORS list, paths, helplines
+│   ├── ml/
+│   │   ├── __init__.py
+│   │   ├── config.py             # 7-factor weights, spatial buffers, scoring tiers
+│   │   ├── normalization.py      # Mathematical normalization & decay functions
+│   │   ├── spatial_features.py   # Spatial queries, Haversine, GeoJSON parsing
+│   │   ├── safety_scorer.py      # Core SafetyScorer engine & comparison logic
+│   │   └── demo_scoring.py       # Standalone scoring demonstration script
 │   ├── schemas/
 │   │   ├── __init__.py
-│   │   ├── route.py             # Pydantic request schema (CoordinatePoint, RouteScoreRequest)
-│   │   └── safety.py            # Pydantic response schema (RouteScoreResponse, etc.)
+│   │   ├── amenity.py            # Nearest hospital/police schemas
+│   │   ├── journey.py            # Journey start/event/complete models
+│   │   ├── navigation.py         # Maneuver steps, routes, turn directions
+│   │   ├── route.py              # CoordinatePoint, RouteScoreRequest
+│   │   ├── safety.py             # Safety score breakdowns and tiers
+│   │   ├── sos.py                # SOS alert and trusted contact schemas
+│   │   └── user.py               # User profiles, login, and registration
 │   ├── services/
 │   │   ├── __init__.py
-│   │   └── route_service.py     # Application service bridging API to SafetyScorer
-│   └── ml/
-│       ├── config.py            # Configurable weights, thresholds, dataset paths
-│       ├── normalization.py     # Mathematical normalization functions and score calculation
-│       ├── spatial_features.py  # Dataset loaders, Haversine geometry, spatial extractors
-│       ├── safety_scorer.py     # Core SafetyScorer engine and route comparison logic
-│       └── demo_scoring.py      # Synthetic geometry test/demo script
+│   │   ├── amenities_service.py  # Spatial indexing of police, hospitals, transit
+│   │   ├── auth_service.py       # Firebase ID token validation & JWT fallback
+│   │   ├── journey_service.py    # Active journeys, telemetry, and CSV feedback
+│   │   ├── navigation_service.py # Polyline decoding, turn maneuvers, offline routes
+│   │   ├── route_service.py      # Adapter connecting REST routes to SafetyScorer
+│   │   └── sos_service.py        # SOS incident logging & tactical safety tips
+│   ├── static/
+│   │   └── index.html            # Web preview and route visualization interface
+│   └── main.py                   # FastAPI app instance, CORS middleware, startup events
 ├── tests/
-│   ├── test_safety_scoring.py   # 14 ML scoring engine unit tests
-│   └── test_api.py              # FastAPI endpoint integration tests
-├── requirements.txt
-└── README.md
+│   ├── test_api.py               # 20 tests: Scoring endpoints and validation
+│   ├── test_end_to_end_services.py # 12 tests: Navigation, places, SOS, and amenities
+│   ├── test_journey_api.py       # 1 test: Journey lifecycle and telemetry logging
+│   └── test_safety_scoring.py    # 14 tests: ML mathematical formulas and spatial features
+├── requirements.txt              # Pinned production Python dependencies
+└── README.md                     # Backend reference documentation
 ```
 
 ---
 
-## Setup Instructions
+## Spatial Datasets & ML Scoring Engine
 
-### 1. Prerequisites
-- Python 3.12 (or 3.10+)
-- All datasets present in `SafeHerAI/datasets/` (verified spatial datasets from Phase 2)
+The scoring engine loads verified non-synthetic datasets for Hyderabad at startup from `datasets/`:
+- **Police Accessibility (25%)**: `datasets/police_stations.geojson` (exponential decay beyond 4 km, buffer saturation).
+- **Emergency Medical Coverage (15%)**: `datasets/hospitals.csv` (linear decay within 3 km).
+- **Public Transit Presence (15%)**: `datasets/transport_stations.csv` (HMRL Metro & TSRTC stops per km).
+- **Arterial Road Hierarchy (15%)**: `datasets/roads/hyderabad_major_roads.geojson` (OSM primary corridors).
+- **Jurisdictional Crime Penalty (15%)**: `datasets/crime_data.csv` (official Hyderabad police zone crime review).
+- **Accident Black Spot Hazard (10%)**: `datasets/road_accidents.csv` (GHMC/HMDA collision junctions).
+- **Route Detour Ratio (5%)**: Ratio of road distance to straight-line Haversine distance.
 
-### 2. Create a Virtual Environment
-```bash
-cd SafeHerAI/backend
-python -m venv venv
-```
+$$\text{Safety Score} \in [0.0, 100.0]$$
 
-### 3. Activate the Virtual Environment
-**Windows (PowerShell):**
+---
+
+## Registered REST API Endpoints (21 Endpoints)
+
+Verified against [`backend/app/api/routes.py`](app/api/routes.py):
+
+### 1. Health & Documentation
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Returns service status: `{"status":"ok","service":"SafeHer AI backend"}` |
+| `GET` | `/docs` | Interactive Swagger documentation |
+| `GET` | `/redoc` | ReDoc OpenAPI documentation |
+
+### 2. Safety Scoring & Proximity
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/safety/score` | Calculates 7-factor safety breakdown and score tier for route coordinates. |
+| `GET` | `/api/v1/safety/nearby-safe-spots` | Returns closest police stations, emergency hospitals, and transit stops by GPS. |
+
+### 3. Route Planning & Navigation
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/routes/plan` | Generates multiple route options between two points, ranks them by safety, and includes navigation steps. |
+| `POST` | `/api/v1/navigation/route` | Generates turn-by-turn maneuvers (e.g. Turn Left, Turn Right) and encoded polylines. |
+| `GET` | `/api/v1/places/autocomplete` | Searches Hyderabad landmarks, metro stations, and neighborhoods. |
+| `GET` | `/api/v1/places/reverse-geocode` | Converts GPS coordinates into a readable landmark or street address. |
+
+### 4. Emergency SOS & Contacts
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/sos/trigger` | Triggers SOS event, identifies nearest police station, and generates tactical advice. |
+| `GET` | `/api/v1/user/contacts` | Lists registered trusted contacts for a user. |
+| `POST` | `/api/v1/user/contacts` | Adds a new trusted emergency contact. |
+| `PUT` | `/api/v1/user/contacts/{contact_id}` | Updates existing emergency contact details. |
+| `DELETE` | `/api/v1/user/contacts/{contact_id}` | Removes a trusted contact. |
+
+### 5. User Authentication & Profile
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/auth/firebase` | Verifies mobile client Firebase ID token and issues backend session profile. |
+| `POST` | `/api/v1/auth/register` | Direct email/password registration (with SHA-256 salt/hash). |
+| `POST` | `/api/v1/auth/login` | Direct login returning JWT access token. |
+| `PUT` | `/api/v1/user/profile` | Updates user display name and emergency phone number. |
+
+### 6. Journey Tracking & Observational Feedback
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/journey/start` | Registers an active navigation session. |
+| `POST` | `/api/v1/journey/event` | Records off-route, delay, or emergency events during a journey. |
+| `POST` | `/api/v1/journey/complete` | Completes journey and logs user safety rating and feedback. |
+| `GET` | `/api/v1/journey/feedback` | Reads accumulated records from `datasets/journey_feedback.csv`. |
+| `GET` | `/api/v1/journey/user` | Lists historical journeys for a user. |
+
+---
+
+## Local Setup & Execution
+
+### 1. Requirements
+- Python 3.10 to 3.12 (tested on Python 3.12.6)
+- Windows, macOS, or Linux
+
+### 2. Environment Setup
 ```powershell
-.\venv\Scripts\Activate.ps1
-```
-**Windows (Command Prompt):**
-```cmd
-venv\Scripts\activate.bat
-```
-**macOS / Linux:**
-```bash
-source venv/bin/activate
-```
+# Navigate to backend directory
+cd C:\SafeHerAI\backend
 
-### 4. Install Requirements
-```bash
+# Create virtual environment
+python -m venv venv
+.\venv\Scripts\Activate.ps1    # macOS/Linux: source venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 5. Environment Variables
-No API keys are required to run the scoring backend.
-When Google APIs and Firebase are integrated in a later phase, copy `.env.example` (to be created) and fill in your own credentials. Never commit secrets to Git.
-
----
-
-## Running the Backend
-
-From the project root (`SafeHerAI/`):
-```bash
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Or from inside the `backend/` directory:
-```bash
+### 3. Running the Server Locally
+```powershell
+# Run from backend directory:
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-
-### API Documentation
-Once running, open in your browser:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **Health Check**: http://localhost:8000/health
+Binds to `0.0.0.0` to permit connections from mobile emulators and physical devices on the local network.
 
 ---
 
-## API Endpoints
+## Running Backend Automated Tests
 
-### `GET /health`
-Returns service operational status.
+SafeHer AI includes 47 tests across 4 test modules:
 
-**Response:**
-```json
-{
-  "status": "ok",
-  "service": "SafeHer AI backend"
-}
+```powershell
+cd C:\SafeHerAI\backend
+pytest -v
 ```
+
+**Test Coverage Breakdown:**
+- `tests/test_safety_scoring.py` (14 tests): Mathematical normalization functions, Haversine geometry, sampling, safety boundary conditions.
+- `tests/test_api.py` (20 tests): Health check, valid scoring inputs, validation error handling (HTTP 422).
+- `tests/test_end_to_end_services.py` (12 tests): Place autocomplete, turn-by-turn navigation maneuvers, reverse geocoding, SOS flow, authentication.
+- `tests/test_journey_api.py` (1 test): Full journey start, event logging, and completion flow.
 
 ---
 
-### `POST /api/v1/safety/score`
-Evaluates a route polyline against genuine Hyderabad spatial datasets and official police zone statistics.
+## Cloud Deployment Configuration (Render)
 
-**Request Body:**
-```json
-{
-  "route_id": "route_alpha",
-  "route_coords": [
-    {"latitude": 17.4100, "longitude": 78.4500},
-    {"latitude": 17.4150, "longitude": 78.4550},
-    {"latitude": 17.4200, "longitude": 78.4600}
-  ],
-  "route_distance_km": 1.85,
-  "route_duration_min": 8.0
-}
-```
+The backend is configured for deployment as a **Render Web Service**:
 
-**Response:**
-```json
-{
-  "route_id": "route_alpha",
-  "safety_score": 65.5,
-  "safety_tier": "Moderate Safety Corridor",
-  "route_distance_km": 1.85,
-  "straight_line_distance_km": 1.82,
-  "detour_ratio": 1.02,
-  "route_duration_min": 8.0,
-  "components": {
-    "S_police": 0.8368,
-    "S_medical": 0.9879,
-    "S_transit": 0.9218,
-    "S_arterial": 0.0625,
-    "P_crime": 1.0,
-    "P_blackspot": 0.0,
-    "P_exposure": 0.0
-  },
-  "contributions": {
-    "police_pts": 20.92,
-    "medical_pts": 14.82,
-    "transit_pts": 13.83,
-    "arterial_pts": 0.94,
-    "crime_compliance_pts": 0.0,
-    "blackspot_compliance_pts": 10.0,
-    "exposure_compliance_pts": 5.0
-  },
-  "raw_features": {
-    "avg_police_dist_km": 0.49,
-    "police_within_1km_count": 3,
-    "min_hospital_dist_km": 0.04,
-    "transit_count_within_500m": 17,
-    "arterial_length_km": 0.12,
-    "traversed_zones": ["West Zone"],
-    "blackspot_count": 0
-  },
-  "limitations_and_proxies": [
-    "Transit Presence is a contextual infrastructure proxy...",
-    "Arterial Road Hierarchy reflects classified primary roadway proportion...",
-    "Crime Volume is derived from official Hyderabad City Police annual reports at zone level...",
-    "Traffic Accident Black Spots represent vehicular collision junctions...",
-    "The Safety Score is an analytical comparative estimate and does not guarantee absolute safety."
-  ]
-}
-```
-
-> **Note:** The example coordinates and values above are illustrative. Always supply real route geometry from Google Directions API in production use.
+1. **Runtime:** Python 3
+2. **Build Command:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. **Start Command:**
+   ```bash
+   uvicorn app.main:app --host 0.0.0.0 --port $PORT
+   ```
+   *Note: In production on Render, `$PORT` is injected dynamically (typically port 10000).*
+4. **Environment Variables on Render:**
+   - `HOST`: `0.0.0.0`
+   - `DEBUG`: `False`
+   - `JWT_SECRET_KEY`: `<generated-secret-key>`
+   - `ALLOWED_ORIGINS`: `*` (or your production frontend domain)
+   - `FIREBASE_PROJECT_ID`: `safeher-ai-491ad` (optional)
+   - `FIREBASE_CREDENTIALS_JSON`: Raw JSON string of the Firebase service account (optional; enables in-memory initialization without committing credentials to Git)
 
 ---
 
-## Synthetic TEST DATA Example Request
+## Security & Secrets Management
 
-> **IMPORTANT:** The coordinates below are SYNTHETIC TEST GEOMETRIES for software testing only.
-> They are NOT real Hyderabad travel routes and MUST NOT be treated as empirical project results.
-
-```bash
-curl -X POST http://localhost:8000/api/v1/safety/score \
-  -H "Content-Type: application/json" \
-  -d '{
-    "route_id": "SYNTHETIC_TEST_ONLY",
-    "route_coords": [
-      {"latitude": 17.4100, "longitude": 78.4500},
-      {"latitude": 17.4150, "longitude": 78.4550},
-      {"latitude": 17.4200, "longitude": 78.4600},
-      {"latitude": 17.4250, "longitude": 78.4650}
-    ],
-    "route_distance_km": 3.07,
-    "route_duration_min": 18.5
-  }'
-```
-
----
-
-## Running Tests
-
-### ML Scoring Engine Tests (14 tests)
-```bash
-python -m unittest backend/tests/test_safety_scoring.py
-```
-
-### FastAPI API Endpoint Tests
-```bash
-python -m unittest backend/tests/test_api.py
-```
-
-### Run All Tests
-```bash
-python -m unittest discover -s backend/tests -p "test_*.py"
-```
-
----
-
-## Safety Score Interpretation
-
-| Score Range | Tier | Meaning |
-|---|---|---|
-| 75.0 – 100.0 | Comparatively Safer Route | Higher police proximity, emergency access, transit density |
-| 50.0 – 74.9 | Moderate Safety Corridor | Standard urban infrastructure presence |
-| 0.0 – 49.9 | Caution Advised Corridor | Lower infrastructure density or proximity to identified hazards |
-
-> The score is a comparative analytical estimate — not a guarantee of safety.
-
----
-
-## Important Notes
-
-- **Google APIs are optional** — the backend includes a high-fidelity offline fallback routing engine using verified Hyderabad landmarks. Add `GOOGLE_MAPS_API_KEY` to `.env` for real-time routing.
-- **Firebase is optional** — JWT-based authentication operates without Firebase. Set `FIREBASE_PROJECT_ID` and `FIREBASE_CREDENTIALS_PATH` to enable Firebase token exchange.
-- **Flutter frontend is fully implemented** — see `frontend/` directory. CORS is pre-configured for `localhost:3000/8000/8080` and Android emulator (`10.0.2.2`).
-- **No API keys are stored in source code** — all credentials use environment variables. See `.env.example` in the project root.
-- **43 tests pass** (14 ML unit tests + 29 API integration tests) covering all endpoints.
+- **Credentials Protection**: `.gitignore` strictly ignores `.env`, `firebase-service-account.json`, and all `*-adminsdk-*.json` files.
+- **In-Memory Cloud Loading**: `auth_service.py` supports `FIREBASE_CREDENTIALS_JSON`, allowing cloud providers to pass credentials securely via environment variables without creating filesystem traces.
+- **Graceful Offline Mode**: If Firebase credentials are not provided, the backend falls back gracefully to local JWT sessions and local storage, ensuring core safety scoring and navigation remain fully operational.

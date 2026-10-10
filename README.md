@@ -1,443 +1,349 @@
-﻿# SafeHer AI
+# SafeHer AI
 
-**Women-Safety Route Recommendation System — Hyderabad, India**
+**Analytical Women-Safety Route Recommendation & Navigation System — Hyderabad, India**
 
-SafeHer AI is a full-stack Android mobile application that helps women navigate Hyderabad more safely by evaluating routes using verified spatial infrastructure data (police stations, emergency hospitals, public transit, road networks, accident black spots) and official Hyderabad City Police annual crime statistics. Routes are ranked by a multi-criteria safety scoring engine and presented alongside real-time emergency tools.
+SafeHer AI is an analytical women-safety and safer route recommendation system designed specifically for Hyderabad, India. The project consists of a full-featured **Flutter (Android) mobile application** and a high-performance **Python FastAPI backend**.
 
-> **Safety Disclaimer:** Safety scores produced by SafeHer AI are comparative route estimates intended as decision-support information. They are **not** a guarantee of personal safety.
+The system evaluates travel routes against genuine spatial infrastructure (police stations, emergency medical hospitals, public transit nodes, classified arterial road corridors, and identified accident black spots) combined with official Hyderabad City Police annual crime statistics. Route alternatives are evaluated, scored across 7 analytical dimensions, and presented to the user with turn-by-turn guidance, live GPS positioning, nearest safety amenities, and one-tap emergency SOS tools.
+
+> [!IMPORTANT]
+> **Safety & Legal Disclaimer:**  
+> Safety scores and route evaluations produced by SafeHer AI are comparative analytical estimates intended purely as decision-support information. They do **not** constitute an absolute guarantee of personal safety. In an active emergency, users must immediately contact official emergency services (Telangana Police: **100**, National Emergency: **112**, Women Helpline: **181**, or SHE Teams: **9490616555**). SafeHer AI does not automatically dispatch first responders.
+
+---
+
+## Live Deployed Backend & Service Links
+
+The SafeHer AI FastAPI backend is deployed on Render's cloud platform:
+
+| Service | URL | Notes |
+|---|---|---|
+| **Base API URL** | `https://safeherai-4baw.onrender.com` | Deployed FastAPI Web Service |
+| **Health Check** | `https://safeherai-4baw.onrender.com/health` | Returns `{"status":"ok","service":"SafeHer AI backend"}` |
+| **Interactive Swagger Docs** | `https://safeherai-4baw.onrender.com/docs` | Live OpenAPI / Swagger UI |
+| **ReDoc Documentation** | `https://safeherai-4baw.onrender.com/redoc` | Alternative API reference |
+| **Web Client Interface** | `https://safeherai-4baw.onrender.com/` | Serves web client static interface |
+
+> [!NOTE]
+> On Render's free tier, backend instances spin down after 15 minutes of inactivity. The first request after an idle period may take 30–50 seconds to cold-start while the container and spatial datasets load into memory. Subsequent calls respond in milliseconds.
+
+---
+
+## Sub-Project Documentation
+
+For component-specific setup and technical guides, refer to:
+- 📱 **[Frontend README (Flutter Android)](frontend/README.md)** — App architecture, screen catalog, Android permissions, GPS/bearing tracking, API configuration, and APK build instructions.
+- ⚙️ **[Backend README (FastAPI Python)](backend/README.md)** — Backend architecture, spatial dataset loading, route calculation, all 21 REST endpoints, test suites, and Render deployment setup.
 
 ---
 
 ## Current Project Status
 
-| Area | Status |
-|---|---|
-| FastAPI backend | Complete MVP |
-| Safety-scoring engine | Implemented and tested |
-| Backend tests | **44 / 44 passing** |
-| Flutter tests | **5 / 5 passing** |
-| Android debug APK | Successfully built and launched |
-| Android release APK | Successfully built (~53.5 MB) |
-| Firebase Auth / Firestore | Configured and tested |
-| Google Maps live API | Optional — not currently configured; demo-map fallback active |
-| iOS | Not built — macOS + Xcode required |
+| Area | Status | Verified Details |
+|---|---|---|
+| **FastAPI Backend** | Production Ready | Deployed on Render; 21 verified endpoints operational |
+| **Safety-Scoring Engine** | Verified & Calibrated | 7-factor multi-criteria spatial algorithm strictly summing to 1.000 |
+| **Backend Test Suite** | **47 / 47 passing** | Unit tests + integration tests + journey pipeline tests |
+| **Flutter Test Suite** | **11 / 11 passing** | Smoke tests, model deserialization, navigation HUD, and GPS tracking |
+| **Static Code Analysis** | **0 errors, 0 warnings** | Flutter analyze clean |
+| **Android Release APK** | Successfully Built | Built at `frontend/build/app/outputs/flutter-apk/app-release.apk` (~56.0 MB) |
+| **Physical Device Test** | Verified | Tested on physical Android phone communicating with deployed Render backend |
+| **Live GPS & Navigation** | Operational | Real-time position tracking, bearing calculation, turn-by-turn maneuvers, dynamic off-route recalculation |
+| **Firebase Integration** | Optional / Graceful Fallback | Firebase Auth & Firestore synchronization supported when configured; local/guest mode active when absent |
+| **Google Maps Live API** | Optional | Offline Hyderabad landmark engine and canvas map provide full fallback if Google API key is omitted |
 
 ---
 
-## Project Structure
+## Repository Structure
 
 ```
 SafeHerAI/
-+-- backend/
-|   +-- app/
-|   |   +-- api/          routes.py  (all REST endpoints)
-|   |   +-- core/         config.py
-|   |   +-- ml/           safety_scorer.py, spatial_features.py,
-|   |   |                 normalization.py, config.py, demo_scoring.py
-|   |   +-- schemas/      route, safety, navigation, amenity, sos, user, journey
-|   |   +-- services/     navigation, route, amenities, sos, auth, journey
-|   |   +-- static/
-|   |   +-- main.py
-|   +-- tests/            44 unit + integration tests
-|   +-- requirements.txt
-+-- frontend/
-|   +-- lib/
-|   |   +-- constants/    app_constants.dart  (colors, URLs, helplines)
-|   |   +-- models/       route, amenity, sos, user, journey models
-|   |   +-- providers/    AuthProvider, RouteProvider, SOSProvider, JourneyProvider
-|   |   +-- screens/      20 screens (see Flutter Screens section)
-|   |   +-- services/     ApiService, FirebaseService
-|   |   +-- widgets/      SafetyBadge, SOSButton, SafeHerDemoMap
-|   |   +-- main.dart
-|   +-- android/          AndroidManifest.xml, google-services.json
-|   +-- pubspec.yaml
-+-- datasets/             Verified Hyderabad spatial datasets (see Datasets section)
-+-- docs/
-|   +-- ml_methodology.md
-+-- firebase-service-account.json   (NOT committed -- see Secrets section)
-+-- .env.example
-+-- .gitignore
+├── backend/
+│   ├── app/
+│   │   ├── api/          routes.py (all 21 registered REST endpoints)
+│   │   ├── core/         config.py (environment variables, CORS, directory resolution)
+│   │   ├── ml/           safety_scorer.py, spatial_features.py, normalization.py, config.py, demo_scoring.py
+│   │   ├── schemas/      route.py, safety.py, navigation.py, amenity.py, sos.py, user.py, journey.py
+│   │   ├── services/     navigation_service.py, route_service.py, amenities_service.py, sos_service.py, auth_service.py, journey_service.py
+│   │   ├── static/       index.html (interactive web preview interface)
+│   │   └── main.py       FastAPI entry point, CORS middleware, lifespan events
+│   ├── tests/            47 automated unit and integration tests
+│   ├── requirements.txt  Pinned production Python dependencies
+│   └── README.md         Detailed backend documentation
+├── frontend/
+│   ├── lib/
+│   │   ├── constants/    app_constants.dart (Render API URL, themes, helplines)
+│   │   ├── models/       route_model.dart, navigation_model.dart, amenity_model.dart, sos_model.dart, user_model.dart, journey_model.dart
+│   │   ├── providers/    auth_provider.dart, route_provider.dart, sos_provider.dart, journey_provider.dart
+│   │   ├── screens/      20 implemented Flutter screens
+│   │   ├── services/     api_service.dart, firebase_service.dart, location_service.dart
+│   │   ├── widgets/      safeher_demo_map.dart, safety_badge.dart, sos_button.dart
+│   │   └── main.dart     Flutter entry point and provider registration
+│   ├── android/          AndroidManifest.xml (permissions), build configurations
+│   ├── test/             widget_test.dart (11 Flutter test cases)
+│   ├── pubspec.yaml      Flutter package dependencies and assets
+│   └── README.md         Detailed frontend documentation
+├── datasets/             Verified genuine Hyderabad spatial datasets
+│   ├── police_stations.geojson
+│   ├── hospitals.csv
+│   ├── transport_stations.csv
+│   ├── crime_data.csv
+│   ├── hyderabad_women_safety.csv
+│   ├── area_zone_mapping.csv
+│   ├── road_accidents.csv
+│   ├── demographics.csv
+│   ├── roads/
+│   │   └── hyderabad_major_roads.geojson
+│   ├── boundaries/
+│   │   └── ghmc_zones.kml
+│   ├── journey_feedback.csv
+│   └── DATA_SOURCES.md   Complete data provenance and academic attribution
+├── docs/                 Extended methodology and spatial documentation
+├── .env.example          Environment variable template with safe placeholders
+├── .gitignore            Rules excluding keys, .env, and build artifacts
+└── README.md             Main repository documentation
 ```
 
 ---
 
-## Technology Stack
+## High-Level Architecture & Request Flow
 
-| Component | Technology |
-|---|---|
-| Mobile App | Flutter 3.x (Dart) |
-| Backend API | Python 3.12 + FastAPI |
-| Safety-Scoring Engine | NumPy, SciPy, Shapely -- multi-criteria weighted scoring |
-| Maps (Demo Mode) | SafeHer AI built-in canvas demo map (no API key required) |
-| Maps (Live Mode) | Google Maps Flutter SDK + Google Directions / Places / Geocoding APIs |
-| Authentication | Firebase Authentication (Email/Password) + Firebase Admin SDK |
-| Cloud Storage | Firebase Cloud Firestore (journeys, SOS events, feedback) |
-| Spatial Data | GeoJSON, CSV -- genuine Hyderabad datasets |
+```
++-------------------------------------------------------------------------------+
+|                        Flutter Android Application                            |
+|  - Live GPS Stream (Geolocator)         - Turn-by-Turn HUD / Compass          |
+|  - Interactive Map & Polylines          - Emergency SOS & Helpline Dialer     |
+|  - Places Search & Autocomplete         - Journey Telemetry & Feedback        |
++-------------------------------------------------------------------------------+
+                                      │
+                         HTTPS Requests / JSON Payloads
+                         Base: https://safeherai-4baw.onrender.com
+                                      ▼
++-------------------------------------------------------------------------------+
+|                         FastAPI Backend (Render)                              |
+|  - CORS Security Policy                 - Exception Handling & Validation     |
+|  - Navigation & Turn Engine             - Amenities Proximity Engine          |
+|  - Authentication (Firebase / JWT)      - Journey & Feedback Service          |
++-------------------------------------------------------------------------------+
+                                      │
+                   Evaluates Spatial Route Geometries
+                                      ▼
++-------------------------------------------------------------------------------+
+|                      7-Factor Safety Scoring Engine                           |
+|  1. Police Proximity (25%)              5. Jurisdictional Crime (15%)         |
+|  2. Emergency Hospitals (15%)           6. Accident Black Spots (10%)         |
+|  3. Public Transit Nodes (15%)          7. Route Directness / Detour (5%)     |
+|  4. Arterial Roads Hierarchy (15%)                                            |
++-------------------------------------------------------------------------------+
+                                      │
+                         Pre-loaded at Startup
+                                      ▼
++-------------------------------------------------------------------------------+
+|                    Genuine Hyderabad Datasets (datasets/)                     |
+|  - Telangana Police GeoJSON             - GHMC / NMC Emergency Hospitals      |
+|  - HMRL Metro & TSRTC Transit Stops     - Official Police Zone Crime Stats    |
+|  - OSM Primary Arterial Road Corridors  - Identified Traffic Black Spots      |
++-------------------------------------------------------------------------------+
+```
 
 ---
 
-## Safety-Scoring Engine
+## Safety-Scoring Methodology & Datasets
 
-The core scoring engine evaluates routes using **7 weighted multi-criteria factors**, each grounded in verified Hyderabad spatial data. It does not use a pre-trained machine learning model; the score is computed analytically from spatial proximity and infrastructure density measurements.
+Rather than relying on black-box or non-transparent predictive models, SafeHer AI utilizes a **multi-criteria analytical spatial model** grounded directly in genuine infrastructure data curated for Hyderabad, India.
 
-| Factor | Weight | Data Source |
+### 1. The 7 Weighted Safety Components
+
+All weights sum strictly to **1.000 (100%)**:
+
+| Component | Weight | Mathematical Function | Description |
+|---|:---:|---|---|
+| **Police Accessibility ($S_{police}$)** | **25%** | Exponential decay with saturation density | Evaluates distance to nearest police station and saturation count within a 1.0 km radius. |
+| **Emergency Medical Proximity ($S_{medical}$)** | **15%** | Continuous linear distance decay | Measures access to 24/7 emergency medical facilities within a 3.0 km buffer. |
+| **Public Transit Density ($S_{transit}$)** | **15%** | Saturation density per kilometer | Contextual proxy reflecting populated transit corridors (Metro stations and bus stops). |
+| **Arterial Road Hierarchy ($S_{arterial}$)** | **15%** | Buffer intersection length ratio | Measures the proportion of the route traversing major, well-lit, high-visibility arterial roads. |
+| **Jurisdictional Crime Penalty ($P_{crime}$)** | **15%** | Police zone crime volume penalty | Normalized against Hyderabad City Police zone statistics. |
+| **Accident Black Spot Hazard ($P_{blackspot}$)** | **10%** | Proximity count penalty | Identifies proximity to known high-collision traffic accident black spots. |
+| **Route Detour & Exposure ($P_{exposure}$)** | **5%** | Detour ratio penalty | Penalizes unnecessary circuitous routing relative to straight-line distance. |
+
+$$\text{Safety Score} = \left( 0.25 S_{police} + 0.15 S_{medical} + 0.15 S_{transit} + 0.15 S_{arterial} + 0.15 (1 - P_{crime}) + 0.10 (1 - P_{blackspot}) + 0.05 (1 - P_{exposure}) \right) \times 100$$
+
+### 2. Qualitative Safety Tiers
+
+| Score Range | Tier Classification | Practical Meaning |
 |---|---|---|
-| Police Accessibility | 25% | Hyderabad City Police station locations |
-| Emergency Medical Proximity | 15% | GHMC / NMC hospital registry |
-| Public Transit Density | 15% | HMRL Metro + TSRTC bus stops |
-| Arterial Road Hierarchy | 15% | OpenStreetMap road classifications |
-| Jurisdictional Crime Volume | 15% | Hyderabad City Police Annual Reviews |
-| Accident Black Spot Avoidance | 10% | GHMC / HMDA identified junctions |
-| Route Efficiency / Directness | 5% | Detour ratio computation |
+| **75.0 – 100.0** | **Comparatively Safer Route** | High police accessibility, frequent transit nodes, along main arterial roads. |
+| **50.0 – 74.9** | **Moderate Safety Corridor** | Standard urban infrastructure presence with average emergency coverage. |
+| **0.0 – 49.9** | **Caution Advised Corridor** | Isolated sections, lower infrastructure density, or proximity to hazards. |
 
-**Score Tiers:**
+### 3. Curated Datasets (`datasets/`)
 
-| Range | Tier |
-|---|---|
-| 75 - 100 | Comparatively Safer Route |
-| 50 - 74.9 | Moderate Safety Corridor |
-| 0 - 49.9 | Caution Advised Corridor |
-
-> Weights are project-defined analytical parameters for comparative route evaluation. They are not official government safety ratings.
+All datasets are real-world, non-synthetic records curated specifically for Hyderabad:
+- `police_stations.geojson`: Exact coordinates of Hyderabad City Police stations.
+- `hospitals.csv`: Emergency healthcare centers and trauma facilities across Hyderabad.
+- `transport_stations.csv`: Hyderabad Metro Rail (HMRL) stations and TSRTC bus stages.
+- `roads/hyderabad_major_roads.geojson`: Primary and secondary arterial road corridors extracted from OpenStreetMap.
+- `crime_data.csv` & `hyderabad_women_safety.csv`: Official annual crime review data aggregated by police zone.
+- `road_accidents.csv`: High-collision accident black spots identified by GHMC / HMDA.
+- `journey_feedback.csv`: Accumulated observational feedback collected from user journeys.
 
 ---
 
-## Datasets
+## Local Development Prerequisites
 
-All datasets are genuine non-synthetic data curated for Hyderabad, India. They are loaded once at backend startup and are not regenerated at runtime.
-
-```
-datasets/
-+-- police_stations.geojson        Hyderabad City Police station locations
-+-- hospitals.csv                  GHMC / NMC emergency hospital registry
-+-- transport_stations.csv         HMRL Metro + TSRTC bus/transit stops
-+-- crime_data.csv                 Official police zone crime statistics
-+-- hyderabad_women_safety.csv     Women-safety zone data
-+-- area_zone_mapping.csv          Area-to-police-zone mapping
-+-- road_accidents.csv             GHMC / HMDA accident black spots
-+-- demographics.csv               Area demographic context data
-+-- roads/
-|   +-- hyderabad_major_roads.geojson   Arterial road network (OSM)
-+-- boundaries/
-|   +-- ghmc_zones.kml             GHMC administrative zone boundaries
-+-- journey_feedback.csv           Accumulated journey feedback (observational)
-+-- DATA_SOURCES.md                Full provenance and attribution
-```
-
-> **Note:** No micro-level GPS crime coordinates are published. Indian law and police practices prohibit publishing precise crime locations for offences against women. Crime data is aggregated by police zone from official annual reviews.
+- **Backend**:
+  - Python 3.10 to 3.12 (tested on Python 3.12.6)
+  - `pip` package manager
+  - Windows PowerShell, macOS zsh, or Linux bash
+- **Frontend**:
+  - Flutter SDK 3.x (tested on Flutter 3.47.6 / Dart 3.13.5)
+  - Android SDK (API 28+ / Android 9.0+)
+  - Android Studio, VS Code, or command-line Android build tools
+  - Physical Android device with Developer Mode / USB debugging, or an Android emulator
 
 ---
 
-## Prerequisites
+## Local Setup & Startup Instructions
 
-### Backend
-- Python 3.10+ (tested on 3.12)
-- pip
-
-### Flutter / Android
-- Flutter SDK 3.0+
-- Android Studio or VS Code with Flutter extension
-- Android device or emulator (API 28+)
-
-### Optional (Full Feature Set)
-- Google Maps API key with Directions, Places, and Geocoding APIs enabled (for live mapping)
-- Firebase project with Email/Password Authentication enabled
-
----
-
-## Setup -- Backend
+### 1. Setting Up the FastAPI Backend Locally
 
 ```powershell
-# Navigate to the project root
-cd C:\SafeHerAI
+# 1. Clone repository and navigate to backend directory
+cd C:\SafeHerAI\backend
 
-# Navigate to backend
-cd backend
-
-# Create a Python virtual environment
+# 2. Create and activate a Python virtual environment
 python -m venv venv
+.\venv\Scripts\Activate.ps1    # On Linux/macOS: source venv/bin/activate
 
-# Activate (PowerShell)
-.\venv\Scripts\Activate.ps1
-
-# Install dependencies
+# 3. Install required dependencies
 pip install -r requirements.txt
 
-# (Optional) Configure environment variables
-# Copy .env.example to .env and set values as needed
-# $env:FIREBASE_CREDENTIALS_PATH = "C:\SafeHerAI\firebase-service-account.json"
-# $env:GOOGLE_MAPS_API_KEY = "your_key_here"
+# 4. (Optional) Create local configuration
+# Copy the root template if custom ports/keys are needed:
+Copy-Item ..\.env.example ..\.env
 
-# Start the FastAPI backend (from project root)
-cd C:\SafeHerAI
-uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+# 5. Start the backend server (binds to 0.0.0.0 for emulator/device access)
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Once running:
-- **Swagger UI:** http://localhost:8000/docs
-- **ReDoc:** http://localhost:8000/redoc
-- **Health Check:** http://localhost:8000/health
+Verify backend health locally:
+- Swagger Docs: `http://localhost:8000/docs`
+- Health Endpoint: `http://localhost:8000/health`
 
----
-
-## Setup -- Flutter Frontend
+### 2. Setting Up the Flutter Frontend
 
 ```powershell
-# Navigate to the frontend directory
+# 1. Navigate to frontend directory
 cd C:\SafeHerAI\frontend
 
-# Get Flutter dependencies
+# 2. Install Flutter packages
 flutter pub get
 
-# Firebase Android configuration
-# 1. Create a Firebase project at https://console.firebase.google.com
-# 2. Enable Email/Password Authentication under Authentication > Sign-in method
-# 3. Download google-services.json and place it at:
-#    frontend/android/app/google-services.json
+# 3. Verify static analysis
+flutter analyze
 
-# Google Maps (optional -- app works without it in demo mode)
-# Add your API key to frontend/android/app/src/main/AndroidManifest.xml:
-# <meta-data android:name="com.google.android.geo.API_KEY"
-#            android:value="YOUR_KEY_HERE"/>
+# 4. Run automated tests
+flutter test
 
-# Run on a connected device or emulator
-flutter run --device-id emulator-5554 --debug
+# 5. Launch the application on a connected device
+flutter run
 ```
-
-> The app includes a **SafeHer AI demo map** that renders without a Google Maps API key, allowing full demonstration of route planning, safety scoring, and all screens without billing configuration.
 
 ---
 
-## Running Tests
+## Environment Variables Configuration
 
-### Backend Tests (44 / 44)
+The backend reads configuration from environment variables (or `.env` in the root). Never commit sensitive credentials. Placeholders are documented in `.env.example`:
 
-```powershell
-cd C:\SafeHerAI
-
-# Activate backend virtual environment first
-cd backend
-.\venv\Scripts\Activate.ps1
-cd ..
-
-# Run all backend tests
-python -m unittest discover -s backend/tests -p "test_*.py"
-```
-
-Expected output: **44 tests passing** (ML unit tests + API integration tests + journey pipeline tests)
-
-### Flutter Tests (5 / 5)
-
-```powershell
-cd C:\SafeHerAI\frontend
-flutter test
-```
-
-Expected output: **5 tests passing**
+| Variable | Required in Prod? | Example / Default Value | Purpose |
+|---|:---:|---|---|
+| `HOST` | No | `0.0.0.0` | IP interface to bind to |
+| `PORT` | Auto (Render) | `8000` | Server listening port |
+| `DEBUG` | Recommended | `False` | Disables verbose debug logging in production |
+| `JWT_SECRET_KEY` | **Yes** | `<secure-random-64-character-hex-string>` | Signs internal user authentication tokens |
+| `JWT_EXPIRATION_HOURS` | No | `72` | Session duration |
+| `ALLOWED_ORIGINS` | Recommended | `*` or `https://safeherai.com` | Comma-separated list of allowed CORS origins |
+| `FIREBASE_PROJECT_ID` | Optional | `safeher-ai-491ad` | Firebase Project identifier |
+| `FIREBASE_CREDENTIALS_JSON` | Optional | `{"type": "service_account", ...}` | Raw service-account JSON string (for Render) |
+| `FIREBASE_CREDENTIALS_PATH` | Optional | `C:\SafeHerAI\firebase-service-account.json` | Path to service-account file (for local dev) |
+| `GOOGLE_MAPS_API_KEY` | Optional | `AIzaSy...` | Optional Google Directions/Places key |
 
 ---
 
 ## Building the Android Release APK
+
+The application has been packaged and verified for physical Android distribution:
 
 ```powershell
 cd C:\SafeHerAI\frontend
 flutter build apk --release
 ```
 
-Output: `frontend/build/app/outputs/flutter-apk/app-release.apk` (~53.5 MB)
-
-The release APK has been successfully built and tested on an Android emulator (API 37 / 1080 x 2400).
-
----
-
-## iOS
-
-Flutter is a cross-platform framework and the project can be targeted at iOS. However, **building, signing, and testing the iOS application requires macOS and Xcode**. The iOS version has not been built or tested in this project.
-
----
-
-## API Endpoints
-
-### Health
-
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/health` | Backend health check |
-
-### Safety Scoring
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/safety/score` | Score a route polyline (7-factor breakdown) |
-| GET | `/api/v1/safety/nearby-safe-spots` | Find nearest police, hospitals, transit by GPS |
-
-### Navigation and Routing
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/routes/plan` | Plan and compare multi-route safety alternatives |
-| GET | `/api/v1/places/autocomplete` | Search Hyderabad places and landmarks |
-
-### Authentication
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/auth/register` | Register new user (legacy / fallback) |
-| POST | `/api/v1/auth/login` | Authenticate user (legacy / fallback) |
-| POST | `/api/v1/auth/firebase` | Exchange Firebase ID token for session |
-| PUT | `/api/v1/user/profile` | Update user display name and emergency phone |
-
-### Emergency SOS and Contacts
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/sos/trigger` | Trigger emergency SOS distress alert |
-| GET | `/api/v1/user/contacts` | List trusted emergency contacts |
-| POST | `/api/v1/user/contacts` | Add trusted emergency contact |
-| PUT | `/api/v1/user/contacts/{id}` | Update trusted contact |
-| DELETE | `/api/v1/user/contacts/{id}` | Delete trusted contact |
-
-### Journey Navigation
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/v1/journey/start` | Start an active navigation journey |
-| POST | `/api/v1/journey/event` | Log a telemetry or SOS event during a journey |
-| POST | `/api/v1/journey/complete` | Complete journey and submit user feedback |
-| GET | `/api/v1/journey/feedback` | Retrieve accumulated feedback dataset entries |
-| GET | `/api/v1/journey/user` | Retrieve navigation journeys for a user |
+- **Actual Release APK Location:**  
+  `C:\SafeHerAI\frontend\build\app\outputs\flutter-apk\app-release.apk`
+- **Output File Size:** ~56.0 MB (58,692,066 bytes)
+- **Pre-configured API URL:** Points to `https://safeherai-4baw.onrender.com`
+- **Installation via ADB:**
+  ```powershell
+  adb install -r frontend\build\app\outputs\flutter-apk\app-release.apk
+  ```
 
 ---
 
-## Flutter Screens
+## Running Test Suites
 
-| Screen | Description |
-|---|---|
-| SplashScreen | Animated loading and branding |
-| LoginScreen | Email/password sign-in + Guest / Demo Mode |
-| RegisterScreen | New account creation |
-| HomeMapScreen | Main map with demo / live routing, filter chips, profile access |
-| RoutePlanningScreen | Origin / destination input with landmark autocomplete |
-| RouteComparisonScreen | Side-by-side multi-route safety comparison |
-| SafetyBreakdownScreen | Detailed 7-factor safety score breakdown |
-| ActiveJourneyScreen | Live navigation view with journey telemetry |
-| JourneyReportScreen | Post-journey summary and feedback submission |
-| SOSScreen | One-tap emergency alert + direct helpline dialing |
-| NearbyAmenitiesScreen | Nearest police stations, hospitals, transit |
-| ProfileScreen | User profile menu |
-| PersonalInfoScreen | Edit display name and emergency phone |
-| JourneyHistoryScreen | Browse past navigation journeys |
-| JourneyDetailsScreen | Per-journey metadata, route info, and safety breakdown |
-| TrustedContactsScreen | Add, edit, and delete emergency contacts |
-| SafetyEmergencyScreen | Emergency helplines + nearby infrastructure links |
-| SettingsScreen | Routing and alert preferences |
-| PrivacyScreen | Data and privacy policy |
-| AboutScreen | App version, methodology, and safety disclaimer |
-
----
-
-## Firebase Architecture
-
-- **Firebase Authentication** -- Email/Password sign-in. The Flutter app calls `FirebaseAuth.createUserWithEmailAndPassword()` and `signInWithEmailAndPassword()`.
-- **Firebase ID Token Exchange** -- After sign-in, the Flutter app obtains a Firebase ID token and sends it to `POST /api/v1/auth/firebase`. The FastAPI backend verifies the token using the **Firebase Admin SDK** with a service-account credential file.
-- **Cloud Firestore** -- Used for journey records, SOS events, and feedback persistence. Firestore security rules restrict each user's data to their own authenticated UID.
-- **Android Configuration** -- `google-services.json` must be present at `frontend/android/app/google-services.json`.
-
-> SafeHer AI does not store user passwords. Credential management is handled entirely by Firebase Authentication.
-
----
-
-## Google Maps
-
-Google Maps billing and an API key are **not currently configured** for this project.
-
-The Flutter app detects the missing API key and automatically activates the **SafeHer AI demo map** -- a built-in canvas renderer that displays route planning, safety scores, markers, and polylines without requiring billing.
-
-To enable live Google mapping:
-1. Create a project at https://console.cloud.google.com
-2. Enable the Maps SDK for Android, Directions API, Places API, and Geocoding API.
-3. Create an API key and add it to `AndroidManifest.xml`:
-   ```xml
-   <meta-data
-       android:name="com.google.android.geo.API_KEY"
-       android:value="YOUR_KEY_HERE" />
-   ```
-4. Optionally set `GOOGLE_MAPS_API_KEY` in the backend `.env` file for server-side routing.
-
----
-
-## Emergency SOS
-
-The SafeHer AI SOS system:
-- Identifies the closest police station from verified dataset coordinates.
-- Notifies registered trusted contacts.
-- Provides one-tap dialing of official emergency helplines.
-- Logs the SOS event with timestamp and GPS coordinates for user records.
-
-**SafeHer AI does not automatically dispatch police or emergency services.** In an emergency, use the built-in dialer or call directly:
-
-| Service | Number |
-|---|---|
-| Telangana Police | 100 |
-| National Emergency | 112 |
-| Women Helpline (All India) | 181 |
-| Hyderabad SHE Teams | 9490616555 |
-| Ambulance | 108 |
-
----
-
-## Journey Feedback
-
-When a journey is completed, users can submit an observational safety rating and notes. This feedback is stored in `datasets/journey_feedback.csv` and in Firestore for future analysis and manual validation.
-
-> Submitting journey feedback does **not** automatically retrain or modify the safety-scoring engine.
-
----
-
-## Environment Variables
-
-See `.env.example` for all available configuration options.
-
-| Variable | Required | Description |
-|---|---|---|
-| `GOOGLE_MAPS_API_KEY` | Optional | Google Maps, Directions, Places, Geocoding APIs |
-| `FIREBASE_PROJECT_ID` | Optional | Firebase project identifier |
-| `FIREBASE_CREDENTIALS_PATH` | Optional | Path to Firebase Admin SDK service-account JSON |
-| `JWT_SECRET_KEY` | Optional | JWT signing secret (defaults to dev key) |
-| `JWT_EXPIRATION_HOURS` | Optional | Token validity in hours (default: 72) |
-
----
-
-## Secrets -- Never Commit
-
-The following files contain private credentials and are excluded by `.gitignore`:
-
+### Backend Tests (47 passing)
+```powershell
+cd C:\SafeHerAI\backend
+pytest -v
 ```
-firebase-service-account.json
-*-adminsdk-*.json
-serviceAccountKey.json
-.env
-*.env
+*Executes 47 automated tests covering mathematical normalization, safety boundary conditions, route scoring, turn maneuvers, emergency SOS, and journey lifecycle.*
+
+### Frontend Tests (11 passing)
+```powershell
+cd C:\SafeHerAI\frontend
+flutter test
 ```
-
-**Never commit API keys, service-account files, or private credentials to version control.**
-
----
-
-## Data Attribution
-
-All spatial datasets are genuine, non-synthetic data curated for Hyderabad, India.
-See `datasets/DATA_SOURCES.md` for full provenance and attribution.
-
-Key sources:
-- Hyderabad City Police (Annual Crime Reviews)
-- HMRL -- Hyderabad Metro Rail Ltd (station locations)
-- GHMC / HMDA (hospital registry, accident black spots)
-- OpenStreetMap (road network classification)
-- TSRTC (bus terminal locations)
+*Executes 11 widget and provider tests verifying deserialization, screen rendering, navigation HUD, GPS tracking, and off-route recalculation.*
 
 ---
 
-## License
+## Emergency SOS & User Safety Features
 
-Developed for academic and research purposes -- Women Safety and Route Recommendation for Hyderabad, India.
+The SafeHer AI application includes tactical safety mechanisms designed to support women during travel:
+- **Nearest Police Station Identification**: Uses real spatial coordinates to locate and display the closest active police facility.
+- **Direct Helpline Calling**: One-tap phone launcher for:
+  - **100** — Telangana Police
+  - **112** — National Emergency
+  - **181** — Women Helpline (All India)
+  - **9490616555** — Hyderabad SHE Teams
+  - **108** — Medical Emergency (Ambulance)
+- **Trusted Contacts Management**: Register up to 5 personal emergency contacts stored with local and optional cloud backup.
+- **Observational Journey Feedback**: Logs post-journey safety reviews to `datasets/journey_feedback.csv` for empirical analysis.
+
+---
+
+## Troubleshooting & Common Questions
+
+1. **Android App Displays "Connection Error" / Cannot reach backend:**
+   - Verify device has active internet access.
+   - Test `https://safeherai-4baw.onrender.com/health` in mobile browser. If the free-tier service has spun down, wait 30–45 seconds for cold-start wake-up.
+2. **Blue Marker Doesn't Move During Walking:**
+   - Ensure Android location permission is set to **"Allow all the time"** or **"While using the app"** with **"Use precise location"** enabled.
+   - The app applies GPS noise filtering for movements under 1.5 meters to prevent jitter; walking 5–10 paces triggers updates.
+3. **Google Maps Displays Gray Grid / Demo Map Appears:**
+   - By design, if no Google Maps API key is configured in `AndroidManifest.xml`, SafeHer AI seamlessly activates the custom canvas demo map without crashing.
+4. **Firebase Service Account Not Loading in Cloud:**
+   - On Render, do not commit JSON files to Git. Instead, paste the service account contents directly into the `FIREBASE_CREDENTIALS_JSON` environment variable.
+
+---
+
+## Data Attribution & Academic Disclaimer
+
+All spatial datasets used by SafeHer AI are compiled from publicly available government reports, open civic databases, and OpenStreetMap:
+- **Hyderabad City Police**: Official Annual Crime Reviews & Zone Boundaries.
+- **Hyderabad Metro Rail Ltd (HMRL) & TSRTC**: Transit station locations.
+- **Greater Hyderabad Municipal Corporation (GHMC)**: Healthcare facilities and civic accident registries.
+- **OpenStreetMap Contributors**: Road network classifications under ODbL.
+
+*Developed for academic, research, and community safety evaluation purposes.*

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class AppConstants {
   // Backend API URL (Use 10.0.2.2 for Android Studio Emulator, localhost for Web/macOS/Windows)
-  static const String defaultApiUrl = 'http://192.168.29.190:8000';
+  static const String defaultApiUrl = 'https://safeherai-4baw.onrender.com';
   static const String localApiUrl = 'http://localhost:8000';
 
   // Hyderabad City Reference Point
